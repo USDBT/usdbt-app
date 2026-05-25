@@ -1,6 +1,5 @@
 import { Router } from 'express'
-import { ID } from 'node-appwrite'
-import { databases } from '../lib/appwrite'
+import { ID, databases } from '../lib/appwrite'
 import { getProduct } from '../lib/bitrefill'
 import { isAddress } from 'viem'
 
