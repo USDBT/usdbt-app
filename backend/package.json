@@ -1,0 +1,21 @@
+{
+  "name": "usdtb-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "test": "bun test",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "bun-types": "latest",
+    "typescript": "^5.0.0"
+  }
+}
