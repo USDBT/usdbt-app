@@ -67,6 +67,7 @@ ordersRouter.get('/:id', async (req, res) => {
       status: (doc as any).status,
       brandName: (doc as any).brandName,
       faceValue: (doc as any).faceValue,
+      paymentAmount: (doc as any).paymentAmount,
       currency: (doc as any).paymentCurrency,
       txHash: (doc as any).txHash ?? null,
       expiresAt: (doc as any).expiresAt,
