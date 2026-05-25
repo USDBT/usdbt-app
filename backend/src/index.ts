@@ -1,6 +1,5 @@
 import express from 'express'
 import cors from 'cors'
-import { client } from './lib/appwrite'
 import { healthRouter } from './routes/health'
 import { productsRouter } from './routes/products'
 import { ordersRouter } from './routes/orders'
@@ -25,10 +24,11 @@ app.listen(PORT, async () => {
   console.log(`[usdtb-backend] listening on port ${PORT}`)
 
   try {
-    await client.ping()
-    console.log('[usdtb-backend] appwrite connection ok')
+    const res = await fetch(`${process.env.APPWRITE_ENDPOINT}/health`)
+    if (res.ok) console.log('[usdtb-backend] appwrite connection ok')
+    else console.warn('[usdtb-backend] appwrite health check returned', res.status)
   } catch (err) {
-    console.error('[usdtb-backend] appwrite ping failed:', err)
+    console.error('[usdtb-backend] appwrite health check failed:', err)
   }
 
   startPoller()

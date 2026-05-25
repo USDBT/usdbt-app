@@ -6,4 +6,3 @@ const client = new Client()
   .setKey(process.env.APPWRITE_API_KEY!)
 
 export const databases = new Databases(client)
-export { client }

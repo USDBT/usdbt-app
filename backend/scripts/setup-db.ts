@@ -1,4 +1,4 @@
-import { Client, Databases, DatabasesIndexType } from 'node-appwrite'
+import { Client, Databases, IndexType } from 'node-appwrite'
 
 const client = new Client()
   .setEndpoint(process.env.APPWRITE_ENDPOINT ?? 'https://sfo.cloud.appwrite.io/v1')
@@ -50,9 +50,9 @@ async function run() {
   console.log('created attributes — waiting for Appwrite to process...')
   await sleep(6000)
 
-  await db.createIndex(DB_ID, ORDERS, 'idx_wallet',        DatabasesIndexType.Key, ['walletAddress'])
-  await db.createIndex(DB_ID, ORDERS, 'idx_status',        DatabasesIndexType.Key, ['status'])
-  await db.createIndex(DB_ID, ORDERS, 'idx_wallet_status', DatabasesIndexType.Key, ['walletAddress', 'status'])
+  await db.createIndex(DB_ID, ORDERS, 'idx_wallet',        IndexType.Key, ['walletAddress'])
+  await db.createIndex(DB_ID, ORDERS, 'idx_status',        IndexType.Key, ['status'])
+  await db.createIndex(DB_ID, ORDERS, 'idx_wallet_status', IndexType.Key, ['walletAddress', 'status'])
 
   console.log('created indexes')
   console.log('\n✅ DB setup complete')
