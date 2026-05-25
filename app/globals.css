@@ -1,15 +1,17 @@
 @import "tailwindcss";
+@config "../tailwind.config.js";
 
 @theme {
   --color-brand: #2b2bf5;
   --color-brand-hover: #1f1fd8;
-  --color-navy: #090b1a;
-  --color-surface: #f4f5fa;
-  --color-surface-2: #eceef7;
+  --color-brand-light: #eef0ff;
+  --color-surface: #f4f5f9;
+  --color-surface-2: #e5e7eb;
 }
 
 body {
-  background: white;
-  color: #111;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  background: #f4f5f9;
+  color: #111827;
   -webkit-font-smoothing: antialiased;
 }

@@ -28,6 +28,12 @@ export interface OrderStatus {
   expiresAt: string
 }
 
+export function priceLabel(p: Product): string {
+  if (p.denominations.length > 0) return `From $${Math.min(...p.denominations)}`
+  if (p.range) return `$${p.range.min}–$${p.range.max}`
+  return 'Variable'
+}
+
 export async function fetchProducts(): Promise<Product[]> {
   const res = await fetch('/api/products')
   if (!res.ok) throw new Error('failed to load products')

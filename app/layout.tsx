@@ -1,19 +1,22 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Roboto } from 'next/font/google'
 import { Providers } from './providers'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
+const roboto = Roboto({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '700'],
+  variable: '--font-sans',
+})
 
 export const metadata: Metadata = {
-  title: 'USDBT — Spend the Meme',
-  description:
-    'Non-KYC virtual Visa cards and 200+ gift cards. Pay with USDC or $USDBT on Base.',
+  title: '$USDBT — Spend the Meme',
+  description: 'Non-KYC gift cards on Base. Pay with USDC or $USDBT. 200+ brands, no paperwork.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={roboto.variable}>
       <body>
         <Providers>{children}</Providers>
       </body>

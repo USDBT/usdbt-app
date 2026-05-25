@@ -1,59 +1,44 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowLeft, Loader2 } from 'lucide-react'
-import { createOrder, type Product } from '@/lib/api'
-
-const FEE = { USDC: 0.04, USDBT: 0.02 }
+import { X, Loader2, Check } from 'lucide-react'
+import { createOrder, priceLabel, type Product } from '@/lib/api'
 
 export function OrderForm({
   product,
   walletAddress,
-  onBack,
+  onClose,
   onOrder,
 }: {
   product: Product
   walletAddress: string
-  onBack: () => void
+  onClose: () => void
   onOrder: (orderId: string, paymentAddress: string, email: string) => void
 }) {
-  const [value, setValue] = useState<number | null>(
-    product.denominations[0] ?? product.range?.min ?? null,
-  )
+  const [value, setValue] = useState<number | null>(product.denominations[0] ?? product.range?.min ?? null)
   const [customValue, setCustomValue] = useState('')
   const [email, setEmail] = useState('')
-  const [currency] = useState<'USDC' | 'USDBT'>('USDC')
+  const [activeTab, setActiveTab] = useState<'order' | 'details'>('order')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const selectedValue =
-    product.range
-      ? parseFloat(customValue) || 0
-      : value ?? 0
-
-  const feeRate = FEE[currency]
-  const total = parseFloat((selectedValue * (1 + feeRate)).toFixed(2))
+  const currency = 'USDC'
+  const feeRate = 0.04
+  const selectedValue = product.range ? parseFloat(customValue) || 0 : value ?? 0
   const fee = parseFloat((selectedValue * feeRate).toFixed(2))
+  const total = parseFloat((selectedValue + fee).toFixed(2))
 
   const valid =
     selectedValue > 0 &&
     email.includes('@') &&
-    (product.range
-      ? selectedValue >= product.range.min && selectedValue <= product.range.max
-      : true)
+    (product.range ? selectedValue >= product.range.min && selectedValue <= product.range.max : true)
 
   async function submit() {
     if (!valid) return
     setLoading(true)
     setError(null)
     try {
-      const order = await createOrder({
-        productId: product.id,
-        value: selectedValue,
-        email,
-        walletAddress,
-        currency,
-      })
+      const order = await createOrder({ productId: product.id, value: selectedValue, email, walletAddress, currency })
       onOrder(order.orderId, order.paymentAddress, email)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'something went wrong')
@@ -63,94 +48,159 @@ export function OrderForm({
   }
 
   return (
-    <main className="max-w-lg mx-auto px-4 py-8">
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-6 transition-colors"
-      >
-        <ArrowLeft size={15} />
-        Back
-      </button>
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+        <div className="flex items-start justify-between mb-4">
+          <div className="w-10 h-10 rounded-xl bg-[--color-brand-light] flex items-center justify-center overflow-hidden flex-shrink-0">
+            {product.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={product.image} alt="" className="w-full h-full object-contain p-1" />
+            ) : (
+              <span className="text-[--color-brand] font-bold text-lg">{product.name[0]}</span>
+            )}
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400">
+            <X size={15} />
+          </button>
+        </div>
+        <h2 className="text-lg font-semibold text-gray-900 leading-tight">{product.name}</h2>
+        <p className="text-xs text-gray-400 mt-0.5">Gift Card · {priceLabel(product)}</p>
+      </div>
 
-      <h1 className="text-2xl font-bold tracking-tight mb-1">{product.name}</h1>
-      <p className="text-gray-500 text-sm mb-6">Gift card · Delivered by email</p>
+      {/* Tabs */}
+      <div className="flex border-b border-gray-100 px-5">
+        {(['order', 'details'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`py-3 mr-5 text-[13px] font-medium capitalize border-b-2 transition-colors ${
+              activeTab === tab
+                ? 'text-[--color-brand] border-[--color-brand]'
+                : 'text-gray-400 border-transparent hover:text-gray-600'
+            }`}
+          >
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+          </button>
+        ))}
+      </div>
 
-      {/* Denomination */}
-      <div className="mb-5">
-        <p className="text-sm font-medium mb-2">Amount</p>
-        {product.denominations.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {product.denominations.map((d) => (
-              <button
-                key={d}
-                onClick={() => setValue(d)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                  value === d
-                    ? 'bg-[--color-brand] border-[--color-brand] text-white'
-                    : 'border-[--color-surface-2] bg-[--color-surface] hover:border-[--color-brand] text-gray-700'
-                }`}
-              >
-                ${d}
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto">
+        {activeTab === 'order' ? (
+          <div className="px-5 py-5 space-y-5">
+            {/* Amount */}
+            <div>
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Amount</p>
+              {product.denominations.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {product.denominations.map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setValue(d)}
+                      className={`px-3.5 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                        value === d
+                          ? 'bg-[--color-brand] border-[--color-brand] text-white'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-[--color-brand]'
+                      }`}
+                    >
+                      ${d}
+                    </button>
+                  ))}
+                </div>
+              ) : product.range ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400 text-sm">$</span>
+                  <input
+                    type="number"
+                    min={product.range.min}
+                    max={product.range.max}
+                    step={product.range.step}
+                    value={customValue}
+                    onChange={(e) => setCustomValue(e.target.value)}
+                    placeholder={`${product.range.min}–${product.range.max}`}
+                    className="w-28 px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="border-t border-gray-100" />
+
+            {/* Pay with */}
+            <div>
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Pay with</p>
+              <button className="flex items-center gap-2.5 border-2 border-[--color-brand] rounded-xl px-4 py-2.5 bg-[--color-brand-light] w-full">
+                <div className="w-5 h-5 rounded-full bg-[--color-brand] flex items-center justify-center flex-shrink-0">
+                  <span className="text-white text-[9px] font-bold">$</span>
+                </div>
+                <span className="text-sm font-semibold text-[--color-brand]">USDC</span>
+                <Check size={14} className="text-[--color-brand] ml-auto" />
               </button>
+            </div>
+
+            <div className="border-t border-gray-100" />
+
+            {/* Email */}
+            <div>
+              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Delivery email</p>
+              <input
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
+              />
+            </div>
+
+            {/* Fee breakdown */}
+            {selectedValue > 0 && (
+              <div className="space-y-2.5">
+                <div className="flex justify-between text-sm text-gray-500">
+                  <span>Card value</span><span>${selectedValue}</span>
+                </div>
+                <div className="flex justify-between text-sm text-gray-500">
+                  <span>Service fee (4%)</span><span>${fee}</span>
+                </div>
+                <div className="border-t border-gray-100 pt-2.5 flex justify-between text-sm font-semibold text-gray-800">
+                  <span>You send</span><span>${total} USDC</span>
+                </div>
+              </div>
+            )}
+
+            {error && <p className="text-red-500 text-xs">{error}</p>}
+          </div>
+        ) : (
+          <div className="px-5 py-5 space-y-4">
+            {[
+              ['Type', product.type || 'Gift Card'],
+              ['Country', product.country || '—'],
+              ['Currency', product.currency || '—'],
+              ['Delivery', 'Email · Instant'],
+              ['KYC', 'None required'],
+            ].map(([label, val]) => (
+              <div key={label} className="flex justify-between text-sm">
+                <span className="text-gray-400">{label}</span>
+                <span className="font-medium text-gray-700">{val}</span>
+              </div>
             ))}
           </div>
-        ) : product.range ? (
-          <div className="flex items-center gap-2">
-            <span className="text-gray-500 text-sm">$</span>
-            <input
-              type="number"
-              min={product.range.min}
-              max={product.range.max}
-              step={product.range.step}
-              value={customValue}
-              onChange={(e) => setCustomValue(e.target.value)}
-              placeholder={`${product.range.min}–${product.range.max}`}
-              className="w-32 px-3 py-2 text-sm border border-[--color-surface-2] rounded-lg outline-none focus:border-[--color-brand] transition-colors"
-            />
-          </div>
-        ) : null}
+        )}
       </div>
 
-      {/* Email */}
-      <div className="mb-5">
-        <label className="text-sm font-medium block mb-2">Delivery email</label>
-        <input
-          type="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-3 py-2.5 text-sm border border-[--color-surface-2] rounded-xl outline-none focus:border-[--color-brand] transition-colors bg-[--color-surface] focus:bg-white"
-        />
-      </div>
-
-      {/* Fee breakdown */}
-      {selectedValue > 0 && (
-        <div className="bg-[--color-surface] rounded-xl p-4 mb-5 text-sm space-y-1.5">
-          <div className="flex justify-between text-gray-500">
-            <span>Card value</span>
-            <span>${selectedValue}</span>
-          </div>
-          <div className="flex justify-between text-gray-500">
-            <span>Fee ({(feeRate * 100).toFixed(0)}%)</span>
-            <span>${fee}</span>
-          </div>
-          <div className="flex justify-between font-semibold border-t border-[--color-surface-2] pt-1.5 mt-1.5">
-            <span>You send</span>
-            <span>${total} {currency}</span>
-          </div>
+      {/* Footer CTA */}
+      {activeTab === 'order' && (
+        <div className="px-5 py-4 border-t border-gray-100">
+          <button
+            onClick={submit}
+            disabled={!valid || loading}
+            className="w-full py-3 bg-[--color-brand] hover:bg-[--color-brand-hover] text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          >
+            {loading && <Loader2 size={14} className="animate-spin" />}
+            {loading ? 'Creating order…' : 'Continue to payment'}
+          </button>
         </div>
       )}
-
-      {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
-
-      <button
-        onClick={submit}
-        disabled={!valid || loading}
-        className="w-full py-3 rounded-xl bg-[--color-brand] text-white font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[--color-brand-hover] transition-colors flex items-center justify-center gap-2"
-      >
-        {loading && <Loader2 size={15} className="animate-spin" />}
-        {loading ? 'Creating order…' : 'Continue to payment'}
-      </button>
-    </main>
+    </div>
   )
 }
