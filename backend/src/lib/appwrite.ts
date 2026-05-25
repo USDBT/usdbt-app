@@ -10,10 +10,14 @@ function headers() {
   }
 }
 
-async function appwriteFetch(path: string, init?: RequestInit) {
-  const res = await fetch(`${ENDPOINT}${path}`, { ...init, headers: headers() })
+async function appwriteFetch(url: string, init?: RequestInit) {
+  const res = await fetch(url, { ...init, headers: headers() })
   const body = await res.json() as any
-  if (!res.ok) throw new Error(body?.message ?? `Appwrite error ${res.status}`)
+  if (!res.ok) {
+    const msg = body?.message ?? `Appwrite error ${res.status}`
+    console.error('[appwrite] error', res.status, msg, 'url:', url)
+    throw new Error(msg)
+  }
   return body
 }
 
@@ -29,27 +33,28 @@ export const Query = {
 
 export const databases = {
   createDocument(db: string, col: string, id: string, data: Record<string, unknown>) {
-    const documentId = id === 'unique()' ? 'unique()' : id
-    return appwriteFetch(`/databases/${db}/collections/${col}/documents`, {
+    return appwriteFetch(`${ENDPOINT}/databases/${db}/collections/${col}/documents`, {
       method: 'POST',
-      body: JSON.stringify({ documentId, data }),
+      body: JSON.stringify({ documentId: id, data }),
     })
   },
 
   getDocument(db: string, col: string, docId: string) {
-    return appwriteFetch(`/databases/${db}/collections/${col}/documents/${docId}`)
+    return appwriteFetch(`${ENDPOINT}/databases/${db}/collections/${col}/documents/${docId}`)
   },
 
   updateDocument(db: string, col: string, docId: string, data: Record<string, unknown>) {
-    return appwriteFetch(`/databases/${db}/collections/${col}/documents/${docId}`, {
+    return appwriteFetch(`${ENDPOINT}/databases/${db}/collections/${col}/documents/${docId}`, {
       method: 'PATCH',
       body: JSON.stringify({ data }),
     })
   },
 
   listDocuments(db: string, col: string, queries: string[] = []) {
-    const qs = queries.map(q => `queries[]=${encodeURIComponent(q)}`).join('&')
-    const path = `/databases/${db}/collections/${col}/documents${qs ? `?${qs}` : ''}`
-    return appwriteFetch(path)
+    const url = new URL(`${ENDPOINT}/databases/${db}/collections/${col}/documents`)
+    for (const q of queries) {
+      url.searchParams.append('queries[]', q)
+    }
+    return appwriteFetch(url.toString())
   },
 }
