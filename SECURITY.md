@@ -15,4 +15,4 @@ We will acknowledge receipt within 48 hours and work with you to understand and 
 - Payment flow manipulation
 - Smart contract vulnerabilities (if applicable)
 
-Thank you for helping keep USDTB secure.
+Thank you for helping keep USDBT secure.

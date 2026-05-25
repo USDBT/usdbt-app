@@ -24,7 +24,7 @@ function ConnectPrompt() {
       </h1>
       <p className="text-gray-500 mb-8 max-w-sm text-sm leading-relaxed">
         Connect your wallet to get a non-KYC virtual card or 200+ gift cards.
-        Pay with USDC or $USDTB on Base.
+        Pay with USDC or $USDBT on Base.
       </p>
       <ConnectButton />
       <p className="text-xs text-gray-400 mt-5">No KYC · No banks · No paperwork</p>
@@ -38,7 +38,7 @@ function Dashboard() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight">Get a card</h1>
         <p className="text-gray-500 text-sm mt-1">
-          Choose your card type and pay with USDC or $USDTB on Base.
+          Choose your card type and pay with USDC or $USDBT on Base.
         </p>
       </div>
 
@@ -48,14 +48,14 @@ function Dashboard() {
           label="01"
           title="Virtual Visa Card"
           description="Spend anywhere Visa is accepted. Works with Apple Pay and Google Pay."
-          fee="2% with $USDTB · 4% with USDC"
+          fee="2% with $USDBT · 4% with USDC"
         />
         <CardOption
           icon={<Gift size={20} />}
           label="02"
           title="Gift Cards"
           description="Amazon, Netflix, Steam, Uber, Spotify and 200+ more. Delivered instantly."
-          fee="2% with $USDTB · 4% with USDC"
+          fee="2% with $USDBT · 4% with USDC"
         />
       </div>
     </main>
