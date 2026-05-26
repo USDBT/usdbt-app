@@ -56,7 +56,13 @@ export function HelpDrawer({ open, onClose }: { open: boolean; onClose: () => vo
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/30" onClick={onClose} />
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-sm bg-white shadow-2xl flex flex-col">
+      <div className={[
+        'fixed z-50 bg-white shadow-2xl flex flex-col',
+        'inset-x-0 bottom-0 rounded-t-2xl max-h-[90vh]',
+        'md:inset-x-auto md:right-0 md:top-0 md:bottom-0 md:w-full md:max-w-sm md:rounded-none md:max-h-none',
+      ].join(' ')}>
+        {/* Drag handle (mobile only) */}
+        <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3 md:hidden" />
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold text-gray-900">Help & FAQ</h2>

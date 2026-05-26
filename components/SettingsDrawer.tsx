@@ -1,58 +1,36 @@
 'use client'
 
-import { X, Bell, Globe, Wallet, Shield, Moon, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
+import { X, Globe, Wallet, Shield, Moon, Bell } from 'lucide-react'
 import { useAccount } from 'wagmi'
+import { useTheme } from 'next-themes'
+import { toast } from 'sonner'
+import { Switch } from '@/components/ui/switch'
+import { useState } from 'react'
 
-function Row({
-  icon: Icon,
-  label,
-  sub,
-  right,
-}: {
-  icon: React.ElementType
-  label: string
-  sub?: string
-  right?: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center gap-3 py-3 border-b border-gray-50 last:border-0">
-      <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
-        <Icon size={15} className="text-gray-500" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-800">{label}</p>
-        {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
-      </div>
-      {right ?? <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />}
-    </div>
-  )
-}
-
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      onClick={() => onChange(!value)}
-      className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${value ? 'bg-[#2b2bf5]' : 'bg-gray-200'}`}
-    >
-      <span
-        className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${value ? 'translate-x-4' : 'translate-x-0.5'}`}
-      />
-    </button>
-  )
+function copy(text: string, label: string) {
+  navigator.clipboard.writeText(text)
+  toast.success(`${label} copied`)
 }
 
 export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { address } = useAccount()
+  const { theme, setTheme } = useTheme()
   const [notifs, setNotifs] = useState(true)
-  const [darkMode, setDarkMode] = useState(false)
+  const isDark = theme === 'dark'
 
   if (!open) return null
 
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/30" onClick={onClose} />
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-sm bg-white shadow-2xl flex flex-col">
+      <div className={[
+        'fixed z-50 bg-white shadow-2xl flex flex-col',
+        'inset-x-0 bottom-0 rounded-t-2xl max-h-[90vh]',
+        'md:inset-x-auto md:right-0 md:top-0 md:bottom-0 md:w-full md:max-w-sm md:rounded-none md:max-h-none',
+      ].join(' ')}>
+        {/* Drag handle (mobile only) */}
+        <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3 md:hidden" />
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold text-gray-900">Settings</h2>
@@ -65,43 +43,101 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
           {/* Account */}
           <div>
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Account</p>
-            <Row
-              icon={Wallet}
-              label="Connected Wallet"
-              sub={address ? `${address.slice(0, 6)}…${address.slice(-4)}` : 'Not connected'}
-            />
-            <Row icon={Globe} label="Network" sub="Base Mainnet" />
-            <Row icon={Shield} label="Privacy" sub="No KYC required" right={
-              <span className="text-xs text-green-500 font-medium">Active</span>
-            } />
+            <div className="divide-y divide-gray-50 border border-gray-100 rounded-xl overflow-hidden">
+              {/* Wallet address — click to copy */}
+              <button
+                onClick={() => address && copy(address, 'Wallet address')}
+                disabled={!address}
+                className="w-full flex items-center gap-3 py-3 px-4 hover:bg-gray-50 transition-colors text-left disabled:opacity-40"
+              >
+                <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Wallet size={15} className="text-gray-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">Connected Wallet</p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {address ? `${address.slice(0, 8)}…${address.slice(-6)}` : 'Not connected'}
+                  </p>
+                </div>
+              </button>
+
+              {/* Network — click to copy */}
+              <button
+                onClick={() => copy('Base Mainnet', 'Network')}
+                className="w-full flex items-center gap-3 py-3 px-4 hover:bg-gray-50 transition-colors text-left"
+              >
+                <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Globe size={15} className="text-gray-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">Network</p>
+                  <p className="text-xs text-gray-400">Base Mainnet</p>
+                </div>
+              </button>
+
+              {/* Privacy — static */}
+              <div className="flex items-center gap-3 py-3 px-4">
+                <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Shield size={15} className="text-gray-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">Privacy</p>
+                  <p className="text-xs text-gray-400">No KYC required</p>
+                </div>
+                <span className="text-xs text-green-500 font-medium flex-shrink-0">Active</span>
+              </div>
+            </div>
           </div>
 
           {/* Preferences */}
           <div>
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Preferences</p>
-            <Row
-              icon={Bell}
-              label="Order Notifications"
-              sub="Get notified when your card is delivered"
-              right={<Toggle value={notifs} onChange={setNotifs} />}
-            />
-            <Row
-              icon={Moon}
-              label="Dark Mode"
-              sub="Coming soon"
-              right={<Toggle value={darkMode} onChange={setDarkMode} />}
-            />
+            <div className="divide-y divide-gray-50 border border-gray-100 rounded-xl overflow-hidden">
+              <div className="flex items-center gap-3 py-3 px-4">
+                <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Bell size={15} className="text-gray-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">Order Notifications</p>
+                  <p className="text-xs text-gray-400">Notified when card is delivered</p>
+                </div>
+                <Switch
+                  checked={notifs}
+                  onCheckedChange={setNotifs}
+                />
+              </div>
+
+              <div className="flex items-center gap-3 py-3 px-4">
+                <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Moon size={15} className="text-gray-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">Dark Mode</p>
+                  <p className="text-xs text-gray-400">Toggle dark theme</p>
+                </div>
+                <Switch
+                  checked={isDark}
+                  onCheckedChange={(v) => setTheme(v ? 'dark' : 'light')}
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Currency */}
+          {/* Payment */}
           <div>
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Payment</p>
-            <Row
-              icon={Wallet}
-              label="Default Currency"
-              sub="USDC on Base"
-              right={<span className="text-xs text-gray-500 font-medium">USDC</span>}
-            />
+            <div className="border border-gray-100 rounded-xl overflow-hidden">
+              <div className="flex items-center gap-3 py-3 px-4">
+                <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                  <Wallet size={15} className="text-gray-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">Default Currency</p>
+                  <p className="text-xs text-gray-400">USDC on Base</p>
+                </div>
+                <span className="text-xs text-gray-500 font-medium flex-shrink-0">USDC</span>
+              </div>
+            </div>
           </div>
         </div>
 

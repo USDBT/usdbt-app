@@ -25,6 +25,30 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Dark mode ─────────────────────────────────────────── */
+.dark {
+  color-scheme: dark;
+  --color-surface: #0f1117;
+  --color-surface-2: #1a1e2e;
+}
+.dark body {
+  background: #0f1117;
+  color: #e5e7eb;
+}
+.dark .bg-white        { background-color: #1a1e2e !important; }
+.dark .bg-gray-50      { background-color: #111827 !important; }
+.dark .bg-gray-100     { background-color: #1f2937 !important; }
+.dark .border-gray-100 { border-color: #374151 !important; }
+.dark .border-gray-200 { border-color: #374151 !important; }
+.dark .text-gray-900   { color: #f9fafb !important; }
+.dark .text-gray-800   { color: #e5e7eb !important; }
+.dark .text-gray-700   { color: #d1d5db !important; }
+.dark .text-gray-600   { color: #9ca3af !important; }
+.dark .text-gray-500   { color: #6b7280 !important; }
+.dark .text-gray-400   { color: #4b5563 !important; }
+.dark .text-gray-300   { color: #374151 !important; }
+.dark .shadow-sm, .dark .shadow-2xl { --tw-shadow-color: rgba(0,0,0,0.5); }
+
 /* cmdk dialog */
 [cmdk-overlay] {
   position: fixed;

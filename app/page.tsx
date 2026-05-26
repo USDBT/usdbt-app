@@ -17,6 +17,7 @@ import { SplashScreen } from '@/components/SplashScreen'
 import { CommandSearch } from '@/components/CommandSearch'
 import { SettingsDrawer } from '@/components/SettingsDrawer'
 import { HelpDrawer } from '@/components/HelpDrawer'
+import { EmailCaptureModal } from '@/components/EmailCaptureModal'
 import { fetchProducts, type Product } from '@/lib/api'
 
 type Step = 'catalog' | 'configure' | 'payment' | 'success'
@@ -118,10 +119,24 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [showEmailModal, setShowEmailModal] = useState(false)
+  const [savedEmail, setSavedEmail] = useState('')
 
   useEffect(() => {
     fetchProducts().then(setAllProducts).catch(() => {})
   }, [])
+
+  // Check user registration after wallet connect
+  useEffect(() => {
+    if (!isConnected || !address) return
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
+    fetch(`${backendUrl}/users/${address}`)
+      .then(r => {
+        if (r.status === 404) setShowEmailModal(true)
+        else if (r.ok) r.json().then((u: any) => setSavedEmail(u.email ?? ''))
+      })
+      .catch(() => {})
+  }, [isConnected, address])
 
   // Cmd+K shortcut
   useEffect(() => {
@@ -170,6 +185,13 @@ export default function Home() {
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
+      {showEmailModal && address && (
+        <EmailCaptureModal
+          walletAddress={address}
+          onSaved={(email) => { setSavedEmail(email); setShowEmailModal(false) }}
+          onDismiss={() => setShowEmailModal(false)}
+        />
+      )}
 
       <div className="flex h-screen overflow-hidden bg-[--color-surface]">
         <Sidebar
@@ -234,12 +256,22 @@ export default function Home() {
               ) : null}
             </main>
 
+            {/* Mobile backdrop for order panel */}
+            {showPanel && (
+              <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={reset} />
+            )}
+
             {/* Right panel — order flow */}
             {showPanel && (
               <aside className={[
-                'flex-shrink-0 border-l border-gray-100 overflow-hidden flex flex-col bg-white',
-                'fixed inset-0 z-50 md:relative md:inset-auto md:z-auto md:w-[280px]',
+                'flex-shrink-0 overflow-hidden flex flex-col bg-white',
+                /* mobile: bottom sheet */
+                'fixed inset-x-0 bottom-0 z-50 rounded-t-2xl shadow-2xl max-h-[92vh]',
+                /* desktop: right panel */
+                'md:relative md:inset-auto md:z-auto md:rounded-none md:max-h-none md:shadow-none md:border-l md:border-gray-100 md:w-[280px]',
               ].join(' ')}>
+                {/* Drag handle (mobile only) */}
+                <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3 md:hidden flex-shrink-0" />
                 {step === 'configure' && product && (
                   <OrderForm
                     product={product}

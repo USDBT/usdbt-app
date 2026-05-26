@@ -52,9 +52,9 @@ export const databases = {
 
   listDocuments(db: string, col: string, queries: string[] = []) {
     const base = `${ENDPOINT}/databases/${db}/collections/${col}/documents`
-    if (queries.length === 0) return appwriteFetch(base)
-    // Use literal queries[] key + encodeURIComponent (spaces → %20 not +)
-    const qs = queries.map(q => `queries[]=${encodeURIComponent(q)}`).join('&')
-    return appwriteFetch(`${base}?${qs}`)
+    // Always request up to 500 docs (default is 25 which silently truncates results)
+    const parts = ['limit=500']
+    for (const q of queries) parts.push(`queries[]=${encodeURIComponent(q)}`)
+    return appwriteFetch(`${base}?${parts.join('&')}`)
   },
 }

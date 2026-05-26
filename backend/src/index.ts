@@ -3,6 +3,8 @@ import cors from 'cors'
 import { healthRouter } from './routes/health'
 import { productsRouter } from './routes/products'
 import { ordersRouter } from './routes/orders'
+import { usersRouter } from './routes/users'
+import { balancesRouter } from './routes/balances'
 import { startPoller } from './services/poller'
 
 const app = express()
@@ -19,6 +21,8 @@ app.use(
 app.use('/health', healthRouter)
 app.use('/products', productsRouter)
 app.use('/orders', ordersRouter)
+app.use('/users', usersRouter)
+app.use('/balances', balancesRouter)
 
 app.listen(PORT, async () => {
   console.log(`[usdtb-backend] listening on port ${PORT}`)
