@@ -5,6 +5,7 @@ import { productsRouter } from './routes/products'
 import { ordersRouter } from './routes/orders'
 import { usersRouter } from './routes/users'
 import { balancesRouter } from './routes/balances'
+import { authRouter } from './routes/auth'
 import { startPoller } from './services/poller'
 
 const app = express()
@@ -19,6 +20,7 @@ app.use(
 )
 
 app.use('/health', healthRouter)
+app.use('/auth', authRouter)
 app.use('/products', productsRouter)
 app.use('/orders', ordersRouter)
 app.use('/users', usersRouter)

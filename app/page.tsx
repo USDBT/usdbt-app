@@ -7,6 +7,7 @@ import {
   ScrollText, Bookmark, Users, Grid2X2,
   Copy, Check, Gift, Gamepad2, Tv, Plane, Utensils, ShoppingCart, Store,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Sidebar, type View } from '@/components/Sidebar'
 import { Header, type Tab } from '@/components/Header'
 import { CardCatalog } from '@/components/CardCatalog'
@@ -19,6 +20,8 @@ import { SettingsDrawer } from '@/components/SettingsDrawer'
 import { HelpDrawer } from '@/components/HelpDrawer'
 import { EmailCaptureModal } from '@/components/EmailCaptureModal'
 import { fetchProducts, type Product } from '@/lib/api'
+import { useAuth } from '@/hooks/useAuth'
+import { getStoredEmail, storeEmail, authHeaders, clearToken, getValidToken } from '@/lib/auth'
 
 type Step = 'catalog' | 'configure' | 'payment' | 'success'
 
@@ -105,6 +108,7 @@ function CategoriesView({ onNavigate }: { onNavigate: (v: View) => void }) {
 
 export default function Home() {
   const { isConnected, address } = useAccount()
+  const { authenticate } = useAuth()
   const [splashDone, setSplashDone] = useState(false)
   const [view, setView] = useState<View>('shop')
   const [activeTab, setActiveTab] = useState<Tab>('cards')
@@ -126,14 +130,44 @@ export default function Home() {
     fetchProducts().then(setAllProducts).catch(() => {})
   }, [])
 
-  // Check user registration after wallet connect
+  // After wallet connect: authenticate (SIWE → JWT), then check user registration
   useEffect(() => {
-    if (!isConnected || !address) return
+    if (!isConnected || !address) {
+      clearToken()
+      return
+    }
+
+    // If we have a stored email, no need to re-check DB
+    const localEmail = getStoredEmail()
+    if (localEmail) {
+      setSavedEmail(localEmail)
+      // Still authenticate in background if no valid token
+      if (!getValidToken()) {
+        authenticate(address).catch(() => {})
+      }
+      return
+    }
+
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
-    fetch(`${backendUrl}/users/${address}`)
+
+    authenticate(address)
+      .then(token => {
+        if (!token) return  // user rejected signing — still let them browse
+        return fetch(`${backendUrl}/users/${address}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      })
       .then(r => {
-        if (r.status === 404) setShowEmailModal(true)
-        else if (r.ok) r.json().then((u: any) => setSavedEmail(u.email ?? ''))
+        if (!r) return
+        if (r.status === 404) {
+          setShowEmailModal(true)
+        } else if (r.ok) {
+          r.json().then((u: any) => {
+            const email = u.email ?? ''
+            setSavedEmail(email)
+            storeEmail(email)
+          })
+        }
       })
       .catch(() => {})
   }, [isConnected, address])
