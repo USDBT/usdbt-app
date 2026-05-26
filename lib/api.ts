@@ -9,6 +9,7 @@ export interface Product {
   countryCode?: string
   currency: string
   image: string
+  imageKey?: string
 }
 
 export function titleize(value: string): string {
@@ -18,6 +19,44 @@ export function titleize(value: string): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ')
+}
+
+// Manual overrides for brands where name→domain heuristic fails
+const DOMAIN_OVERRIDES: Record<string, string> = {
+  'steam':             'steampowered.com',
+  'google play':       'play.google.com',
+  'xbox':              'xbox.com',
+  'playstation':       'playstation.com',
+  'battle.net':        'battle.net',
+  'battlenet':         'battle.net',
+  'at&t':              'att.com',
+  'twitch':            'twitch.tv',
+  'youtube':           'youtube.com',
+  'disney':            'disneyplus.com',
+  'hbo':               'hbomax.com',
+  'foot locker':       'footlocker.com',
+  "macy's":            'macys.com',
+  'west elm':          'westelm.com',
+  'bloomin':           'bloominbrands.com',
+  "ruth's chris":      'ruthschris.com',
+}
+
+function brandLogoUrl(name: string): string {
+  const lower = name.toLowerCase()
+
+  for (const [key, domain] of Object.entries(DOMAIN_OVERRIDES)) {
+    if (lower.includes(key)) return `https://logo.clearbit.com/${domain}`
+  }
+
+  // Strip country / product-type suffixes and derive domain
+  const clean = name
+    .replace(/\b(usa|uk|us|ca|canada|global|worldwide|international|pin|prepaid|recharge|store)\b/gi, '')
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .trim()
+  const slug = clean.replace(/\s+/g, '').toLowerCase()
+  if (slug.length >= 3) return `https://logo.clearbit.com/${slug}.com`
+
+  return ''
 }
 
 function normalizeProduct(raw: any): Product {
@@ -41,35 +80,25 @@ function normalizeProduct(raw: any): Product {
       }
     : null
 
+  // Bitrefill v2 `image` field is an internal token slug, not a URL.
+  // Their CDN is signed-URL restricted. Use Clearbit logo API instead.
   const imageValue = raw?.image
   const rawImage =
     typeof imageValue === 'string'
       ? imageValue
       : typeof imageValue === 'object' && imageValue
-        ? String(
-            imageValue.url ??
-            imageValue.src ??
-            imageValue.image_url ??
-            imageValue.logo ??
-            ''
-          )
-        : String(
-            raw?.image_url ??
-            raw?.logo ??
-            raw?.logo_url ??
-            raw?.brand_image ??
-            ''
-          )
+        ? String(imageValue.url ?? imageValue.src ?? imageValue.logo ?? '')
+        : String(raw?.image_url ?? raw?.logo ?? raw?.logo_url ?? '')
 
   const image = /^https?:\/\//i.test(rawImage)
-    ? rawImage
-    : raw?.id
-      ? `/api/products/${encodeURIComponent(String(raw.id))}/image`
-      : ''
+    ? rawImage                           // already a full URL — use it
+    : brandLogoUrl(String(raw?.name ?? ''))  // derive from brand name via Clearbit
+
+  const name = String(raw?.name ?? 'Unknown')
 
   return {
     id: String(raw?.id ?? ''),
-    name: String(raw?.name ?? 'Unknown'),
+    name,
     type: String(raw?.type ?? raw?.categories?.[0] ?? 'gift_card'),
     categories: Array.isArray(raw?.categories) ? raw.categories.map((c: any) => String(c)) : [],
     denominations: denominations.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)),
@@ -78,7 +107,13 @@ function normalizeProduct(raw: any): Product {
     countryCode: String(raw?.country_code ?? ''),
     currency: String(raw?.currency ?? ''),
     image,
+    imageKey: rawImage || undefined,
   }
+}
+
+export interface WalletBalances {
+  usdc: string
+  usdbt: string
 }
 
 export interface OrderCreated {
@@ -170,4 +205,11 @@ export async function getOrderProgress(orderId: string): Promise<OrderProgress> 
   const res = await fetch(`/api/orders/${orderId}/progress`)
   if (!res.ok) throw new Error('order not found')
   return res.json()
+}
+
+export async function getWalletBalances(address: string): Promise<WalletBalances> {
+  const res = await fetch(`/api/balances/${address}`)
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? 'failed to load balances')
+  return data
 }

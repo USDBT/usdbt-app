@@ -26,7 +26,18 @@ productsRouter.get('/:id', async (req, res) => {
 
 productsRouter.get('/:id/image', async (req, res) => {
   try {
-    const imageRes = await getProductImage(req.params.id)
+    const ref = typeof req.query.ref === 'string' && req.query.ref.trim().length > 0 ? req.query.ref.trim() : null
+    const candidates = [ref, req.params.id].filter(Boolean) as string[]
+    let imageRes: Response | null = null
+    for (const candidate of candidates) {
+      try {
+        imageRes = await getProductImage(candidate)
+        break
+      } catch {
+        // try next candidate
+      }
+    }
+    if (!imageRes) throw new Error('Image not found for product')
     const contentType = imageRes.headers.get('content-type') ?? 'image/png'
     const cacheControl = imageRes.headers.get('cache-control') ?? 'public, max-age=3600'
     const ab = await imageRes.arrayBuffer()

@@ -14,6 +14,13 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
   return body as T
 }
 
+function encodePathPreservingSlashes(value: string): string {
+  return value
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/')
+}
+
 async function reqRaw(path: string, options?: RequestInit): Promise<Response> {
   const res = await fetch(`${BASE}${path}`, {
     ...options,
@@ -25,7 +32,7 @@ async function reqRaw(path: string, options?: RequestInit): Promise<Response> {
   if (!res.ok) {
     let details = ''
     try {
-      details = JSON.stringify(await res.json())
+      details = JSON.stringify(await res.clone().json())
     } catch {
       details = await res.text()
     }
@@ -66,9 +73,10 @@ export async function listProducts(page = 0): Promise<{ products: BitrefillProdu
   for (const path of variants) {
     try {
       const raw = await req<any>(path)
+      // Bitrefill v2 returns {meta, data:[...]}
+      if (Array.isArray(raw?.data)) return { products: raw.data as BitrefillProduct[] }
       if (Array.isArray(raw?.products)) return { products: raw.products as BitrefillProduct[] }
       if (Array.isArray(raw?.items)) return { products: raw.items as BitrefillProduct[] }
-      if (Array.isArray(raw?.data)) return { products: raw.data as BitrefillProduct[] }
       if (Array.isArray(raw)) return { products: raw as BitrefillProduct[] }
       errors.push(`Unexpected response shape for ${path}: ${JSON.stringify(raw).slice(0, 200)}`)
     } catch (err) {
@@ -83,8 +91,8 @@ export async function getProduct(id: string): Promise<BitrefillProduct> {
   return req(`/products/${id}`)
 }
 
-export async function getProductImage(id: string): Promise<Response> {
-  return reqRaw(`/products/${encodeURIComponent(id)}/image`)
+export async function getProductImage(token: string): Promise<Response> {
+  return reqRaw(`/products/${encodePathPreservingSlashes(token)}/image`)
 }
 
 export async function createInvoice(

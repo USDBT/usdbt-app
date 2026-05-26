@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X, Check, Minus, Plus } from 'lucide-react'
-import { createOrder, priceLabel, titleize, type Product } from '@/lib/api'
+import { createOrder, getWalletBalances, priceLabel, titleize, type Product } from '@/lib/api'
 
 export function OrderForm({
   product,
@@ -19,30 +19,70 @@ export function OrderForm({
 }) {
   const [value, setValue] = useState<number | null>(product.denominations[0] ?? product.range?.min ?? null)
   const [customValue, setCustomValue] = useState(product.range?.min ? String(product.range.min) : '')
+  const [fixedInput, setFixedInput] = useState(product.denominations[0] ? String(product.denominations[0]) : '')
   const [email, setEmail] = useState(prefilledEmail ?? '')
   const [isPrefilled, setIsPrefilled] = useState(Boolean(prefilledEmail))
   const [activeTab, setActiveTab] = useState<'order' | 'details'>('order')
   const [loading, setLoading] = useState(false)
+  const [balancesLoading, setBalancesLoading] = useState(false)
+  const [usdcBalance, setUsdcBalance] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const currency = 'USDC'
   const feeRate = 0.04
-  const selectedValue = product.range ? parseFloat(customValue) || 0 : value ?? 0
+  const sortedDenominations = useMemo(
+    () => [...product.denominations].filter((n) => Number.isFinite(n)).sort((a, b) => a - b),
+    [product.denominations],
+  )
+  const selectedValue = product.range ? parseFloat(customValue) || 0 : parseFloat(fixedInput) || 0
   const fee = parseFloat((selectedValue * feeRate).toFixed(2))
   const total = parseFloat((selectedValue + fee).toFixed(2))
   const inRange = product.range ? selectedValue >= product.range.min && selectedValue <= product.range.max : true
   const emailValid = email.includes('@')
+  const fixedValid = product.range ? true : sortedDenominations.includes(selectedValue)
+  const hasEnoughBalance = usdcBalance === null ? true : usdcBalance >= total
 
   const valid =
     selectedValue > 0 &&
     emailValid &&
-    inRange
+    inRange &&
+    fixedValid &&
+    hasEnoughBalance
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadBalances() {
+      if (!walletAddress) return
+      setBalancesLoading(true)
+      try {
+        const data = await getWalletBalances(walletAddress)
+        if (!cancelled) setUsdcBalance(Number(data.usdc))
+      } catch {
+        if (!cancelled) setUsdcBalance(null)
+      } finally {
+        if (!cancelled) setBalancesLoading(false)
+      }
+    }
+    loadBalances()
+    return () => { cancelled = true }
+  }, [walletAddress])
 
   function updateVariableAmount(direction: 1 | -1) {
     if (!product.range) return
     const step = product.range.step || 1
     const next = Math.max(product.range.min, Math.min(product.range.max, (selectedValue || product.range.min) + (step * direction)))
     setCustomValue(String(Number(next.toFixed(2))))
+  }
+
+  function updateFixedAmount(direction: 1 | -1) {
+    if (sortedDenominations.length === 0) return
+    const current = parseFloat(fixedInput) || sortedDenominations[0]
+    const currentIdx = sortedDenominations.findIndex((d) => d === current)
+    const fallbackIdx = currentIdx >= 0 ? currentIdx : 0
+    const nextIdx = Math.max(0, Math.min(sortedDenominations.length - 1, fallbackIdx + direction))
+    const next = sortedDenominations[nextIdx]
+    setValue(next)
+    setFixedInput(String(next))
   }
 
   async function submit() {
@@ -105,20 +145,44 @@ export function OrderForm({
             <div>
               <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Amount</p>
               {product.denominations.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {product.denominations.map((d) => (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
                     <button
-                      key={d}
-                      onClick={() => setValue(d)}
-                      className={`px-3.5 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                        value === d
-                          ? 'bg-[--color-brand] border-[--color-brand] text-white'
-                          : 'border-gray-200 bg-white text-gray-600 hover:border-[--color-brand]'
-                      }`}
+                      type="button"
+                      onClick={() => updateFixedAmount(-1)}
+                      className="h-9 w-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
                     >
-                      ${d}
+                      <Minus size={14} />
                     </button>
-                  ))}
+                    <input
+                      type="number"
+                      value={fixedInput}
+                      onChange={(e) => { setFixedInput(e.target.value); setValue(parseFloat(e.target.value) || null) }}
+                      className="flex-1 px-3 py-2 text-center text-sm border border-gray-200 rounded-lg outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateFixedAmount(1)}
+                      className="h-9 w-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {sortedDenominations.slice(0, 8).map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => { setValue(d); setFixedInput(String(d)) }}
+                        className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                          selectedValue === d
+                            ? 'bg-[--color-brand] border-[--color-brand] text-white'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-[--color-brand]'
+                        }`}
+                      >
+                        ${d}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ) : product.range ? (
                 <div className="flex items-center gap-2">
@@ -153,6 +217,9 @@ export function OrderForm({
                 <p className="text-xs text-red-500 mt-2">
                   Amount must be between ${product.range.min} and ${product.range.max}.
                 </p>
+              )}
+              {!product.range && !fixedValid && (
+                <p className="text-xs text-red-500 mt-2">Amount must match a valid denomination for this card.</p>
               )}
             </div>
 
@@ -207,6 +274,15 @@ export function OrderForm({
                 </div>
                 <div className="border-t border-gray-100 pt-2.5 flex justify-between text-sm font-semibold text-gray-800">
                   <span>You send</span><span>${total} USDC</span>
+                </div>
+                <div className={`text-xs ${hasEnoughBalance ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {balancesLoading
+                    ? 'Checking wallet balance...'
+                    : usdcBalance === null
+                      ? 'Could not verify wallet balance right now.'
+                      : hasEnoughBalance
+                        ? `Balance OK: ${usdcBalance.toFixed(2)} USDC available`
+                        : `Insufficient balance: ${usdcBalance.toFixed(2)} USDC available`}
                 </div>
               </div>
             )}

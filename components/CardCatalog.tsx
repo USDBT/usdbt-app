@@ -17,6 +17,12 @@ function categoryLabel(p: Product): string {
   return p.country || 'Global'
 }
 
+function maxValueLabel(p: Product): string {
+  if (p.range) return `Max $${p.range.max}`
+  if (p.denominations.length > 0) return `Max $${Math.max(...p.denominations)}`
+  return 'Max —'
+}
+
 function ProductThumb({ product, className }: { product: Product; className?: string }) {
   const [failed, setFailed] = useState(false)
   const showImage = !!product.image && !failed
@@ -228,7 +234,10 @@ export function CardCatalog({
                     </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500">{categoryLabel(p)}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{priceLabel(p)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700">
+                    <div>{priceLabel(p)}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{maxValueLabel(p)}</div>
+                  </td>
                   <td className="px-4 py-3">
                     <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 font-medium">
                       {brandType(p.denominations, p.range)}
@@ -270,6 +279,7 @@ export function CardCatalog({
                 <p className="text-xs text-gray-400 mt-1">{categoryLabel(p)}</p>
                 <div className="mt-auto pt-2">
                   <p className="text-xs text-gray-500">{priceLabel(p)}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">{maxValueLabel(p)}</p>
                   <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
                     {brandType(p.denominations, p.range)}
                   </span>
