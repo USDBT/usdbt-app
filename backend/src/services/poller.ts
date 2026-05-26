@@ -19,9 +19,10 @@ export function startPoller(intervalMs = 15_000): void {
 async function checkPendingOrders(): Promise<void> {
   let docs: any[]
   try {
+    // Only filter by status — handle expiry client-side to avoid
+    // range query syntax issues with Appwrite's REST API
     const result = await databases.listDocuments(DB, COL, [
       Query.equal('status', 'pending_payment'),
-      Query.greaterThan('expiresAt', new Date().toISOString()),
     ])
     docs = result.documents
   } catch (err) {
@@ -30,6 +31,24 @@ async function checkPendingOrders(): Promise<void> {
   }
 
   if (docs.length === 0) return
+
+  const now = new Date()
+  const active = docs.filter(d => new Date(d.expiresAt) > now)
+  const expired = docs.filter(d => new Date(d.expiresAt) <= now)
+
+  // Mark expired orders as failed
+  for (const doc of expired) {
+    try {
+      await databases.updateDocument(DB, COL, doc.$id, {
+        status: 'failed',
+        failureReason: 'payment window expired',
+      })
+    } catch (err) {
+      console.error(`[poller] failed to expire order ${doc.$id}:`, err)
+    }
+  }
+
+  if (active.length === 0) return
 
   let latestBlock: bigint
   try {
@@ -41,15 +60,13 @@ async function checkPendingOrders(): Promise<void> {
 
   const fromBlock = latestBlock > LOOK_BACK_BLOCKS ? latestBlock - LOOK_BACK_BLOCKS : 0n
 
-  for (const order of docs) {
+  for (const order of active) {
     try {
       await checkOrder(order, fromBlock)
     } catch (err) {
       console.error(`[poller] error checking order ${order.$id}:`, err)
     }
   }
-
-  await expireStaleOrders()
 }
 
 async function checkOrder(order: any, fromBlock: bigint): Promise<void> {
@@ -68,14 +85,4 @@ async function checkOrder(order: any, fromBlock: bigint): Promise<void> {
 
   await databases.updateDocument(DB, COL, order.$id, { txHash: match.txHash })
   await fulfillOrder(order.$id)
-}
-
-async function expireStaleOrders(): Promise<void> {
-  const result = await databases.listDocuments(DB, COL, [
-    Query.equal('status', 'pending_payment'),
-    Query.lessThan('expiresAt', new Date().toISOString()),
-  ])
-  for (const doc of result.documents) {
-    await databases.updateDocument(DB, COL, doc.$id, { status: 'failed', failureReason: 'payment window expired' })
-  }
 }
