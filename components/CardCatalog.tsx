@@ -1,15 +1,38 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, MoreHorizontal, LayoutGrid, List, ChevronDown } from 'lucide-react'
-import { fetchProducts, priceLabel, type Product } from '@/lib/api'
+import { Loader2, MoreHorizontal, LayoutGrid, List, CreditCard } from 'lucide-react'
+import { fetchProducts, priceLabel, titleize, type Product } from '@/lib/api'
 
 const FEATURED = ['Amazon', 'Netflix', 'Steam', 'Google Play']
 
 function brandType(denominations: number[], range: Product['range']): string {
-  if (denominations.length > 0) return 'Fixed'
   if (range) return 'Variable'
+  if (denominations.length > 0) return 'Fixed'
   return 'Gift Card'
+}
+
+function categoryLabel(p: Product): string {
+  if (p.categories && p.categories.length > 0) return titleize(p.categories[0])
+  return p.country || 'Global'
+}
+
+function ProductThumb({ product, className }: { product: Product; className?: string }) {
+  const [failed, setFailed] = useState(false)
+  const showImage = !!product.image && !failed
+
+  return (
+    <div className={className}>
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={product.image} alt={product.name} className="w-full h-full object-contain p-1.5" onError={() => setFailed(true)} />
+      ) : (
+        <div className="w-full h-full rounded-[inherit] bg-gradient-to-br from-slate-100 via-slate-200 to-blue-100 border border-slate-200 flex items-center justify-center">
+          <CreditCard size={18} className="text-slate-500" />
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function CardCatalog({
@@ -23,23 +46,69 @@ export function CardCatalog({
 }) {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [category, setCategory] = useState<'all' | 'fixed' | 'variable'>('all')
+  const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc'>('name_asc')
+  const [uiPage, setUiPage] = useState(1)
+  const perPage = 20
 
   useEffect(() => {
-    fetchProducts()
-      .then(setProducts)
+    fetchProducts(0)
+      .then((items) => {
+        setProducts(items)
+        setPage(0)
+        setHasMore(items.length >= 100)
+      })
       .catch(() => setError('Failed to load gift cards. Try refreshing.'))
       .finally(() => setLoading(false))
   }, [])
+
+  async function loadMore() {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const nextPage = page + 1
+      const items = await fetchProducts(nextPage)
+      setProducts((prev) => {
+        const map = new Map(prev.map((p) => [p.id, p] as const))
+        for (const item of items) map.set(item.id, item)
+        return Array.from(map.values())
+      })
+      setPage(nextPage)
+      setHasMore(items.length >= 100)
+    } catch {
+      setError('Failed to load more cards.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const featured = FEATURED
     .map((name) => products.find((p) => p.name.toLowerCase().includes(name.toLowerCase())))
     .filter(Boolean) as Product[]
 
-  const filtered = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()),
-  )
+  const filtered = products
+    .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
+    .filter((p) => {
+      if (category === 'all') return true
+      if (category === 'fixed') return !p.range
+      return !!p.range
+    })
+    .sort((a, b) => {
+      if (sortBy === 'name_desc') return b.name.localeCompare(a.name)
+      return a.name.localeCompare(b.name)
+    })
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage))
+  const paged = filtered.slice((uiPage - 1) * perPage, uiPage * perPage)
+
+  useEffect(() => {
+    setUiPage(1)
+  }, [search, category, sortBy, products.length])
 
   if (loading) {
     return (
@@ -75,14 +144,7 @@ export function CardCatalog({
                     : 'border-gray-100 hover:border-gray-300 hover:shadow-sm bg-white'
                 }`}
               >
-                <div className="w-10 h-10 rounded-xl bg-[--color-brand-light] mb-3 flex items-center justify-center overflow-hidden">
-                  {p.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.image} alt="" className="w-full h-full object-contain p-1" />
-                  ) : (
-                    <span className="text-[--color-brand] font-bold text-base">{p.name[0]}</span>
-                  )}
-                </div>
+                <ProductThumb product={p} className="w-10 h-10 rounded-xl mb-3 flex items-center justify-center overflow-hidden" />
                 <p className="text-sm font-semibold text-gray-800 leading-tight">{p.name}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{priceLabel(p)}</p>
               </button>
@@ -91,7 +153,7 @@ export function CardCatalog({
         </div>
       )}
 
-      {/* Brand table */}
+      {/* Brand listing */}
       <div className="bg-white rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-gray-100">
         {/* Controls row */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
@@ -101,15 +163,39 @@ export function CardCatalog({
             <span className="font-medium text-gray-700">Gift Cards</span>
           </div>
           <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-1 mr-1">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'fixed', label: 'Fixed' },
+                { id: 'variable', label: 'Variable' },
+              ].map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setCategory(c.id as 'all' | 'fixed' | 'variable')}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                    category === c.id
+                      ? 'bg-[--color-brand-light] border-[--color-brand] text-[--color-brand]'
+                      : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
               className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400"
             >
               {viewMode === 'list' ? <LayoutGrid size={15} /> : <List size={15} />}
             </button>
-            <button className="flex items-center gap-1 text-xs text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors">
-              Sort <ChevronDown size={11} className="ml-0.5" />
-            </button>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'name_asc' | 'name_desc')}
+              className="text-xs text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 bg-white hover:bg-gray-50 transition-colors outline-none"
+            >
+              <option value="name_asc">Sort: A → Z</option>
+              <option value="name_desc">Sort: Z → A</option>
+            </select>
           </div>
         </div>
 
@@ -125,7 +211,7 @@ export function CardCatalog({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((p) => (
+              {paged.map((p) => (
                 <tr
                   key={p.id}
                   onClick={() => onSelect(p)}
@@ -137,18 +223,11 @@ export function CardCatalog({
                 >
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-lg bg-[--color-brand-light] flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {p.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.image} alt="" className="w-full h-full object-contain p-0.5" />
-                        ) : (
-                          <span className="text-[--color-brand] text-[10px] font-bold">{p.name[0]}</span>
-                        )}
-                      </div>
+                      <ProductThumb product={p} className="w-7 h-7 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" />
                       <span className="text-sm font-medium text-gray-800">{p.name}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{p.type || 'Gift Card'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-500">{categoryLabel(p)}</td>
                   <td className="px-4 py-3 text-sm text-gray-700">{priceLabel(p)}</td>
                   <td className="px-4 py-3">
                     <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 font-medium">
@@ -175,23 +254,61 @@ export function CardCatalog({
             </tbody>
           </table>
         ) : (
-          <div className="p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5">
-            {filtered.map((p) => (
+          <div className="p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+            {paged.map((p) => (
               <button
                 key={p.id}
                 onClick={() => onSelect(p)}
-                className={`text-left p-3.5 rounded-xl border transition-all ${
+                className={`text-left p-3.5 rounded-xl border transition-all min-h-[170px] flex flex-col ${
                   selectedProduct?.id === p.id
                     ? 'border-[--color-brand] bg-[--color-brand-light]'
                     : 'border-gray-100 bg-white hover:border-gray-300 hover:shadow-sm'
                 }`}
               >
-                <p className="text-sm font-medium text-gray-800 leading-tight">{p.name}</p>
-                <p className="text-xs text-gray-400 mt-1">{priceLabel(p)}</p>
+                <ProductThumb product={p} className="w-full h-24 rounded-xl mb-3 overflow-hidden" />
+                <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{p.name}</p>
+                <p className="text-xs text-gray-400 mt-1">{categoryLabel(p)}</p>
+                <div className="mt-auto pt-2">
+                  <p className="text-xs text-gray-500">{priceLabel(p)}</p>
+                  <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
+                    {brandType(p.denominations, p.range)}
+                  </span>
+                </div>
               </button>
             ))}
           </div>
         )}
+
+        <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+          <p className="text-xs text-gray-400">{filtered.length} cards loaded</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setUiPage((p) => Math.max(1, p - 1))}
+              disabled={uiPage <= 1}
+              className="text-xs font-medium px-2.5 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Prev
+            </button>
+            <span className="text-xs text-gray-500">Page {uiPage} / {totalPages}</span>
+            <button
+              onClick={() => setUiPage((p) => Math.min(totalPages, p + 1))}
+              disabled={uiPage >= totalPages}
+              className="text-xs font-medium px-2.5 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Next
+            </button>
+            {hasMore && (
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {loadingMore && <Loader2 size={12} className="animate-spin" />}
+                {loadingMore ? 'Loading…' : 'Load more'}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

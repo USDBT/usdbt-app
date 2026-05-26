@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import { ID, databases, requiredEnv } from '../lib/appwrite'
 import { getProduct } from '../lib/bitrefill'
+import { ORDER_STATUS } from '../lib/order-status'
+import { getOrderProgress } from '../lib/order-progress'
 import { isAddress } from 'viem'
 
 export const ordersRouter = Router()
@@ -45,7 +47,7 @@ ordersRouter.post('/', async (req, res) => {
     paymentCurrency: currency,
     paymentAmount,
     feeRate,
-    status: 'pending_payment',
+    status: ORDER_STATUS.PENDING_PAYMENT,
     expiresAt,
   })
 
@@ -55,21 +57,44 @@ ordersRouter.post('/', async (req, res) => {
     paymentAmount,
     currency,
     expiresAt,
+    estimatedReadyAt: (doc as any).estimatedReadyAt ?? null,
   })
 })
 
 ordersRouter.get('/:id', async (req, res) => {
   try {
     const doc = await databases.getDocument(DB, COL, req.params.id)
+    const status = (doc as any).status as string
     res.json({
       orderId: doc.$id,
-      status: (doc as any).status,
+      status,
       brandName: (doc as any).brandName,
       faceValue: (doc as any).faceValue,
       paymentAmount: (doc as any).paymentAmount,
       currency: (doc as any).paymentCurrency,
       txHash: (doc as any).txHash ?? null,
       expiresAt: (doc as any).expiresAt,
+      estimatedReadyAt: null,
+      deliveredAt: null,
+      failureReason: (doc as any).failureReason ?? null,
+      progress: getOrderProgress(status as any),
+    })
+  } catch {
+    res.status(404).json({ error: 'order not found' })
+  }
+})
+
+ordersRouter.get('/:id/progress', async (req, res) => {
+  try {
+    const doc = await databases.getDocument(DB, COL, req.params.id)
+    const status = (doc as any).status as string
+    const progress = getOrderProgress(status as any)
+    res.json({
+      orderId: doc.$id,
+      status,
+      progress,
+      estimatedReadyAt: (doc as any).estimatedReadyAt ?? null,
+      failureReason: (doc as any).failureReason ?? null,
     })
   } catch {
     res.status(404).json({ error: 'order not found' })

@@ -1,21 +1,31 @@
 import { databases, requiredEnv } from '../lib/appwrite'
 import { createInvoice, payInvoice, getInvoice } from '../lib/bitrefill'
 import { resend } from '../lib/email'
+import { ORDER_STATUS } from '../lib/order-status'
 
 const DB = requiredEnv('APPWRITE_DATABASE_ID')
 const COL = requiredEnv('APPWRITE_ORDERS_COLLECTION_ID')
 const FROM = process.env.EMAIL_FROM ?? 'cards@usdbt.us'
 
 export async function fulfillOrder(orderId: string): Promise<void> {
-  await databases.updateDocument(DB, COL, orderId, { status: 'confirming' })
+  await databases.updateDocument(DB, COL, orderId, {
+    status: ORDER_STATUS.HOT_WALLET_FUNDED,
+  })
 
   let invoice
   try {
+    await databases.updateDocument(DB, COL, orderId, {
+      status: ORDER_STATUS.BITREFILL_PROCESSING,
+    })
+
     invoice = await createInvoice(
       await getOrderField(orderId, 'brandId'),
       await getOrderField(orderId, 'faceValue'),
       1,
     )
+    await databases.updateDocument(DB, COL, orderId, {
+      reloadlyOrderId: invoice.id,
+    })
 
     const paid = await payInvoice(invoice.id)
     const order = paid.orders?.[0]
@@ -24,7 +34,7 @@ export async function fulfillOrder(orderId: string): Promise<void> {
     const pin = codes[0]?.pin ?? ''
 
     await databases.updateDocument(DB, COL, orderId, {
-      status: 'fulfilled',
+      status: ORDER_STATUS.DELIVERED,
       reloadlyOrderId: order?.id ?? invoice.id,
     })
 
@@ -39,8 +49,15 @@ export async function fulfillOrder(orderId: string): Promise<void> {
       html: buildEmailHtml({ brandName, faceValue, code, pin, redemptionInfo: order?.redemptionInfo }),
     })
   } catch (err) {
+    const doc = await databases.getDocument(DB, COL, orderId) as any
+    const wasUserDebited = [
+      ORDER_STATUS.USER_DEBITED,
+      ORDER_STATUS.HOT_WALLET_FUNDED,
+      ORDER_STATUS.BITREFILL_PROCESSING,
+    ].includes(doc.status)
+
     await databases.updateDocument(DB, COL, orderId, {
-      status: 'failed',
+      status: wasUserDebited ? ORDER_STATUS.REFUNDED : ORDER_STATUS.FAILED,
       failureReason: String(err),
     })
     throw err

@@ -2,11 +2,83 @@ export interface Product {
   id: string
   name: string
   type: string
+  categories?: string[]
   denominations: number[]
   range: { min: number; max: number; step: number } | null
   country: string
+  countryCode?: string
   currency: string
   image: string
+}
+
+export function titleize(value: string): string {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function normalizeProduct(raw: any): Product {
+  const packageAmounts = Array.isArray(raw?.packages)
+    ? raw.packages
+        .map((pkg: any) => Number(pkg?.amount ?? pkg?.value))
+        .filter((n: number) => Number.isFinite(n))
+    : []
+
+  const denominations = Array.isArray(raw?.denominations)
+    ? raw.denominations
+    : Array.isArray(raw?.fixed_denominations)
+      ? raw.fixed_denominations
+      : packageAmounts
+
+  const range = raw?.range && typeof raw.range === 'object'
+    ? {
+        min: Number(raw.range.min ?? raw.range.minimum ?? 0),
+        max: Number(raw.range.max ?? raw.range.maximum ?? 0),
+        step: Number(raw.range.step ?? 1),
+      }
+    : null
+
+  const imageValue = raw?.image
+  const rawImage =
+    typeof imageValue === 'string'
+      ? imageValue
+      : typeof imageValue === 'object' && imageValue
+        ? String(
+            imageValue.url ??
+            imageValue.src ??
+            imageValue.image_url ??
+            imageValue.logo ??
+            ''
+          )
+        : String(
+            raw?.image_url ??
+            raw?.logo ??
+            raw?.logo_url ??
+            raw?.brand_image ??
+            ''
+          )
+
+  const image = /^https?:\/\//i.test(rawImage)
+    ? rawImage
+    : raw?.id
+      ? `/api/products/${encodeURIComponent(String(raw.id))}/image`
+      : ''
+
+  return {
+    id: String(raw?.id ?? ''),
+    name: String(raw?.name ?? 'Unknown'),
+    type: String(raw?.type ?? raw?.categories?.[0] ?? 'gift_card'),
+    categories: Array.isArray(raw?.categories) ? raw.categories.map((c: any) => String(c)) : [],
+    denominations: denominations.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)),
+    range: range && Number.isFinite(range.min) && Number.isFinite(range.max) ? range : null,
+    country: String(raw?.country_name ?? raw?.country ?? ''),
+    countryCode: String(raw?.country_code ?? ''),
+    currency: String(raw?.currency ?? ''),
+    image,
+  }
 }
 
 export interface OrderCreated {
@@ -19,26 +91,56 @@ export interface OrderCreated {
 
 export interface OrderStatus {
   orderId: string
-  status: 'pending_payment' | 'confirming' | 'fulfilled' | 'failed'
+  status:
+    | 'pending_payment'
+    | 'user_debited'
+    | 'hot_wallet_funded'
+    | 'bitrefill_processing'
+    | 'delivered'
+    | 'failed'
+    | 'refunded'
   brandName: string
   faceValue: number
   paymentAmount: number
   currency: string
   txHash: string | null
   expiresAt: string
+  estimatedReadyAt?: string | null
+  deliveredAt?: string | null
+  failureReason?: string | null
+  progress?: {
+    step: number
+    totalSteps: number
+    label: string
+    terminal: boolean
+  }
+}
+
+export interface OrderProgress {
+  orderId: string
+  status: OrderStatus['status']
+  progress: {
+    step: number
+    totalSteps: number
+    label: string
+    terminal: boolean
+  }
+  estimatedReadyAt?: string | null
+  failureReason?: string | null
 }
 
 export function priceLabel(p: Product): string {
-  if (p.denominations.length > 0) return `From $${Math.min(...p.denominations)}`
+  if (Array.isArray(p.denominations) && p.denominations.length > 0) return `From $${Math.min(...p.denominations)}`
   if (p.range) return `$${p.range.min}–$${p.range.max}`
   return 'Variable'
 }
 
-export async function fetchProducts(): Promise<Product[]> {
-  const res = await fetch('/api/products')
+export async function fetchProducts(page = 0): Promise<Product[]> {
+  const res = await fetch(`/api/products?page=${page}`)
   if (!res.ok) throw new Error('failed to load products')
   const data = await res.json()
-  return data.products ?? []
+  const list = data.products ?? data.items ?? data.data ?? (Array.isArray(data) ? data : [])
+  return Array.isArray(list) ? list.map(normalizeProduct).filter((p) => !!p.id) : []
 }
 
 export async function createOrder(body: {
@@ -60,6 +162,12 @@ export async function createOrder(body: {
 
 export async function getOrderStatus(orderId: string): Promise<OrderStatus> {
   const res = await fetch(`/api/orders/${orderId}`)
+  if (!res.ok) throw new Error('order not found')
+  return res.json()
+}
+
+export async function getOrderProgress(orderId: string): Promise<OrderProgress> {
+  const res = await fetch(`/api/orders/${orderId}/progress`)
   if (!res.ok) throw new Error('order not found')
   return res.json()
 }

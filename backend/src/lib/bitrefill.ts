@@ -14,6 +14,26 @@ async function req<T>(path: string, options?: RequestInit): Promise<T> {
   return body as T
 }
 
+async function reqRaw(path: string, options?: RequestInit): Promise<Response> {
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${process.env.BITREFILL_API_KEY}`,
+      ...options?.headers,
+    },
+  })
+  if (!res.ok) {
+    let details = ''
+    try {
+      details = JSON.stringify(await res.json())
+    } catch {
+      details = await res.text()
+    }
+    throw new Error(`Bitrefill ${path} ${res.status}: ${details}`)
+  }
+  return res
+}
+
 export interface BitrefillProduct {
   id: string
   name: string
@@ -36,11 +56,35 @@ export interface BitrefillInvoice {
 }
 
 export async function listProducts(page = 0): Promise<{ products: BitrefillProduct[] }> {
-  return req(`/products?page=${page}&per_page=100&type=giftcard`)
+  const variants = [
+    `/products?page=${page}&per_page=100&type=giftcard`,
+    `/products?page=${page}&per_page=100&type=gift_card`,
+    `/products?page=${page}&per_page=100`,
+  ]
+  const errors: string[] = []
+
+  for (const path of variants) {
+    try {
+      const raw = await req<any>(path)
+      if (Array.isArray(raw?.products)) return { products: raw.products as BitrefillProduct[] }
+      if (Array.isArray(raw?.items)) return { products: raw.items as BitrefillProduct[] }
+      if (Array.isArray(raw?.data)) return { products: raw.data as BitrefillProduct[] }
+      if (Array.isArray(raw)) return { products: raw as BitrefillProduct[] }
+      errors.push(`Unexpected response shape for ${path}: ${JSON.stringify(raw).slice(0, 200)}`)
+    } catch (err) {
+      errors.push(`Request failed for ${path}: ${String(err)}`)
+    }
+  }
+
+  throw new Error(`Bitrefill products lookup failed. ${errors.join(' | ')}`)
 }
 
 export async function getProduct(id: string): Promise<BitrefillProduct> {
   return req(`/products/${id}`)
+}
+
+export async function getProductImage(id: string): Promise<Response> {
+  return reqRaw(`/products/${encodeURIComponent(id)}/image`)
 }
 
 export async function createInvoice(

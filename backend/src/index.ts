@@ -6,6 +6,7 @@ import { ordersRouter } from './routes/orders'
 import { usersRouter } from './routes/users'
 import { balancesRouter } from './routes/balances'
 import { authRouter } from './routes/auth'
+import { webhooksRouter } from './routes/webhooks'
 import { startPoller } from './services/poller'
 
 const app = express()
@@ -29,6 +30,21 @@ function logConfigPresence(): void {
   for (const name of missing) console.warn(`[config] ${name}=missing`)
 }
 
+app.use((req, res, next) => {
+  const startedAt = Date.now()
+  const ts = new Date().toISOString()
+  const ip = req.ip ?? req.socket.remoteAddress ?? 'unknown'
+
+  res.on('finish', () => {
+    const durationMs = Date.now() - startedAt
+    console.log(
+      `[request] ${ts} ip=${ip} method=${req.method} path=${req.originalUrl} status=${res.statusCode} durationMs=${durationMs}`
+    )
+  })
+
+  next()
+})
+
 app.use(express.json())
 app.use(
   cors({
@@ -43,6 +59,7 @@ app.use('/products', productsRouter)
 app.use('/orders', ordersRouter)
 app.use('/users', usersRouter)
 app.use('/balances', balancesRouter)
+app.use('/webhooks', webhooksRouter)
 
 app.listen(PORT, async () => {
   console.log(`[usdtb-backend] listening on port ${PORT}`)

@@ -67,9 +67,10 @@ export function EmailCaptureModal({ walletAddress, onSaved, onDismiss }: Props) 
             <button
               type="submit"
               disabled={loading || !email.trim()}
-              className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50"
+              className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               style={{ backgroundColor: '#2b2bf5' }}
             >
+              {loading && <span className="loading-bar-spinner" aria-hidden="true" />}
               {loading ? 'Saving…' : 'Save & Continue'}
             </button>
           </form>

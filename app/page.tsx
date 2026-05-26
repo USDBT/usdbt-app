@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import {
   ScrollText, Bookmark, Users, Grid2X2,
-  Copy, Check, Gift, Gamepad2, Tv, Plane, Utensils, ShoppingCart, Store,
+  Copy, Check, Gift, Gamepad2, Tv, Plane, Utensils, ShoppingCart, Store, Activity, DollarSign,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Sidebar, type View } from '@/components/Sidebar'
@@ -19,7 +19,7 @@ import { CommandSearch } from '@/components/CommandSearch'
 import { SettingsDrawer } from '@/components/SettingsDrawer'
 import { HelpDrawer } from '@/components/HelpDrawer'
 import { EmailCaptureModal } from '@/components/EmailCaptureModal'
-import { fetchProducts, type Product } from '@/lib/api'
+import { fetchProducts, getOrderProgress, type Product, type OrderProgress } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { getStoredEmail, storeEmail, authHeaders, clearToken, getValidToken } from '@/lib/auth'
 
@@ -101,6 +101,306 @@ function CategoriesView({ onNavigate }: { onNavigate: (v: View) => void }) {
             </button>
           ))}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ActivityView({ connected, orderId, email }: { connected: boolean; orderId: string | null; email: string }) {
+  const [animate, setAnimate] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setAnimate(true), 80)
+    return () => clearTimeout(t)
+  }, [])
+
+  const activityRows = [
+    connected ? 'Wallet connected' : 'Wallet not connected',
+    email ? `Email saved: ${email}` : 'No email saved yet',
+    orderId ? `Latest order created: ${orderId}` : 'No order created yet',
+  ]
+  const weeklyOrders = [1, 2, 1, 3, 2, 4, 3]
+  const total = weeklyOrders.reduce((a, b) => a + b, 0)
+  const statusData = [
+    { label: 'Completed', value: 62, color: '#2b2bf5' },
+    { label: 'Pending', value: 28, color: '#7c83ff' },
+    { label: 'Failed', value: 10, color: '#b7bcff' },
+  ]
+  const statusTotal = statusData.reduce((acc, s) => acc + s.value, 0)
+  const radius = 46
+  const circumference = 2 * Math.PI * radius
+  let offsetCursor = 0
+
+  return (
+    <div className="px-5 py-5">
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Activity size={16} className="text-[--color-brand]" />
+          <h2 className="text-sm font-semibold text-gray-800">Recent Activity</h2>
+        </div>
+        <div className="space-y-2.5">
+          {activityRows.map((row) => (
+            <div key={row} className="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-600">
+              {row}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-800">Orders (Last 7 Days)</h3>
+          <span className="text-xs text-gray-400">{total} total</span>
+        </div>
+        <div className="flex items-end gap-2 h-32">
+          {weeklyOrders.map((v, i) => {
+            const pct = Math.max(12, (v / 4) * 100)
+            return (
+              <div key={`${v}-${i}`} className="flex-1 h-full flex flex-col items-center gap-1">
+                <div className="w-full flex-1 bg-[#eef0ff] rounded-md overflow-hidden flex items-end">
+                  <div
+                    className="w-full rounded-md transition-all duration-700"
+                    style={{ backgroundColor: '#2b2bf5', height: animate ? `${pct}%` : '0%' }}
+                  />
+                </div>
+                <span className="text-[10px] text-gray-400">{['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mt-4">
+        <h3 className="text-sm font-semibold text-gray-800 mb-4">Order Status Mix</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+          <div className="relative w-[120px] h-[120px] mx-auto sm:mx-0">
+            <svg width="120" height="120" viewBox="0 0 120 120" className="-rotate-90">
+              <circle cx="60" cy="60" r={radius} fill="none" stroke="#eef0ff" strokeWidth="12" />
+              {statusData.map((item) => {
+                const segment = (item.value / statusTotal) * circumference
+                const strokeDasharray = `${segment} ${circumference - segment}`
+                const strokeDashoffset = -offsetCursor
+                offsetCursor += segment
+                return (
+                  <circle
+                    key={item.label}
+                    cx="60"
+                    cy="60"
+                    r={radius}
+                    fill="none"
+                    stroke={item.color}
+                    strokeWidth="12"
+                    strokeDasharray={animate ? strokeDasharray : `0 ${circumference}`}
+                    strokeDashoffset={strokeDashoffset}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dasharray 800ms ease' }}
+                  />
+                )
+              })}
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-xs text-gray-500">100%</span>
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-2">
+            {statusData.map((item) => (
+              <div key={item.label} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span className="text-gray-600">{item.label}</span>
+                </div>
+                <span className="text-gray-500 font-medium">{item.value}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SpendView({ orderId, paymentAddress }: { orderId: string | null; paymentAddress: string }) {
+  const [animate, setAnimate] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setAnimate(true), 80)
+    return () => clearTimeout(t)
+  }, [])
+
+  const spendData = [
+    { label: 'Gift Cards', value: 76, color: '#2b2bf5' },
+    { label: 'Fees', value: 18, color: '#7c83ff' },
+    { label: 'Other', value: 6, color: '#b7bcff' },
+  ]
+  const total = spendData.reduce((acc, s) => acc + s.value, 0)
+  const radius = 52
+  const circumference = 2 * Math.PI * radius
+  let offsetCursor = 0
+
+  return (
+    <div className="px-5 py-5">
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-4">
+        <div className="flex items-center gap-2 mb-4">
+          <DollarSign size={16} className="text-[--color-brand]" />
+          <h2 className="text-sm font-semibold text-gray-800">Current Spend Context</h2>
+        </div>
+        <div className="space-y-2.5">
+          <div className="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-600">
+            {orderId ? `Open order: ${orderId}` : 'No active order in progress'}
+          </div>
+          <div className="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-600 break-all">
+            {paymentAddress ? `Payment address: ${paymentAddress}` : 'Payment address will appear after creating an order'}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-800 mb-4">Spend Breakdown</h3>
+        <div className="flex flex-col md:flex-row md:items-center gap-6 mb-5">
+          <div className="mx-auto md:mx-0 relative w-[132px] h-[132px]">
+            <svg width="132" height="132" viewBox="0 0 132 132" className="-rotate-90">
+              <circle cx="66" cy="66" r={radius} fill="none" stroke="#eef0ff" strokeWidth="14" />
+              {spendData.map((item) => {
+                const segment = (item.value / total) * circumference
+                const strokeDasharray = `${segment} ${circumference - segment}`
+                const strokeDashoffset = -offsetCursor
+                offsetCursor += segment
+                return (
+                  <circle
+                    key={item.label}
+                    cx="66"
+                    cy="66"
+                    r={radius}
+                    fill="none"
+                    stroke={item.color}
+                    strokeWidth="14"
+                    strokeDasharray={animate ? strokeDasharray : `0 ${circumference}`}
+                    strokeDashoffset={strokeDashoffset}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dasharray 800ms ease' }}
+                  />
+                )
+              })}
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-lg font-semibold text-gray-800">{total}%</span>
+              <span className="text-[11px] text-gray-400">allocated</span>
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-2">
+            {spendData.map((item) => (
+              <div key={`legend-${item.label}`} className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span className="text-gray-600">{item.label}</span>
+                </div>
+                <span className="text-gray-500 font-medium">{item.value}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3 mb-4">
+          {spendData.map((item) => (
+            <div key={item.label}>
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>{item.label}</span>
+                <span>{item.value}%</span>
+              </div>
+              <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full transition-all duration-700"
+                  style={{ backgroundColor: item.color, width: animate ? `${item.value}%` : '0%' }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
+          Animated placeholder metrics for now. Next step is wiring real spend totals from order history.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function OrdersView({ orderId }: { orderId: string | null }) {
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(orderId)
+  const [progress, setProgress] = useState<OrderProgress | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (orderId) {
+      setCurrentOrderId(orderId)
+      localStorage.setItem('latest_order_id', orderId)
+      return
+    }
+    const saved = localStorage.getItem('latest_order_id')
+    if (saved) setCurrentOrderId(saved)
+  }, [orderId])
+
+  useEffect(() => {
+    if (!currentOrderId) return
+    let active = true
+    const run = async () => {
+      try {
+        const p = await getOrderProgress(currentOrderId)
+        if (!active) return
+        setProgress(p)
+        setError(null)
+      } catch {
+        if (!active) return
+        setError('Could not load order progress.')
+      }
+    }
+    run()
+    const id = setInterval(run, 5000)
+    return () => {
+      active = false
+      clearInterval(id)
+    }
+  }, [currentOrderId])
+
+  if (!currentOrderId) {
+    return (
+      <EmptyState
+        icon={ScrollText}
+        title="No orders yet"
+        sub="Create your first card order and it will appear here with live progress."
+      />
+    )
+  }
+
+  const steps = ['Waiting for payment', 'Payment received', 'Funding provider wallet', 'Issuing your card']
+  const currentStep = progress?.progress?.step ?? 1
+
+  return (
+    <div className="px-5 py-5">
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-gray-800">Latest Order</h2>
+          <span className="text-[11px] text-gray-400 font-mono">{currentOrderId}</span>
+        </div>
+        <div className="space-y-2">
+          {steps.map((label, idx) => {
+            const done = currentStep > idx + 1
+            const current = currentStep === idx + 1 && !progress?.progress?.terminal
+            return (
+              <div key={label} className="flex items-center gap-2">
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: done || current ? '#2b2bf5' : '#d1d5db' }}
+                />
+                <span className={`text-xs ${done || current ? 'text-gray-700' : 'text-gray-400'}`}>{label}</span>
+              </div>
+            )
+          })}
+        </div>
+        <p className="text-xs text-gray-500 mt-4">
+          {progress?.progress?.label ?? 'Tracking order progress…'}
+        </p>
+        {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
       </div>
     </div>
   )
@@ -198,6 +498,14 @@ export default function Home() {
     setSearch('')
   }
 
+  function handleTabChange(tab: Tab) {
+    if (tab === 'support') {
+      setHelpOpen(true)
+      return
+    }
+    setActiveTab(tab)
+  }
+
   const handleSplashDone = useCallback(() => setSplashDone(true), [])
 
   const showPanel = step !== 'catalog'
@@ -242,7 +550,7 @@ export default function Home() {
             search={search}
             onSearch={setSearch}
             activeTab={activeTab}
-            onTabChange={setActiveTab}
+            onTabChange={handleTabChange}
             onHamburgerClick={() => setMobileMenuOpen(true)}
             onOpenSearch={() => setSearchOpen(true)}
           />
@@ -264,19 +572,29 @@ export default function Home() {
                   <p className="text-[11px] text-gray-300 mt-4">No KYC · On Base · Instant delivery</p>
                 </div>
               ) : view === 'shop' ? (
-                <div className="p-4 md:p-5">
-                  <CardCatalog
-                    search={search}
-                    selectedProduct={product}
-                    onSelect={(p) => { setProduct(p); setStep('configure') }}
-                  />
-                </div>
+                activeTab === 'cards' ? (
+                  <div className="p-4 md:p-5">
+                    <CardCatalog
+                      search={search}
+                      selectedProduct={product}
+                      onSelect={(p) => { setProduct(p); setStep('configure') }}
+                    />
+                  </div>
+                ) : activeTab === 'activity' ? (
+                  <ActivityView connected={isConnected} orderId={orderId} email={savedEmail || email} />
+                ) : activeTab === 'spend' ? (
+                  <SpendView orderId={orderId} paymentAddress={paymentAddress} />
+                ) : (
+                  <div className="p-4 md:p-5">
+                    <CardCatalog
+                      search={search}
+                      selectedProduct={product}
+                      onSelect={(p) => { setProduct(p); setStep('configure') }}
+                    />
+                  </div>
+                )
               ) : view === 'orders' ? (
-                <EmptyState
-                  icon={ScrollText}
-                  title="No orders yet"
-                  sub="Once you make a purchase, your orders will appear here. Cards are delivered instantly to your email."
-                />
+                <OrdersView orderId={orderId} />
               ) : view === 'saved' ? (
                 <EmptyState
                   icon={Bookmark}
@@ -310,6 +628,7 @@ export default function Home() {
                   <OrderForm
                     product={product}
                     walletAddress={address!}
+                    prefilledEmail={savedEmail || undefined}
                     onClose={reset}
                     onOrder={(id, addr, mail) => {
                       setOrderId(id)
@@ -328,7 +647,7 @@ export default function Home() {
                   />
                 )}
                 {step === 'success' && (
-                  <SuccessScreen email={email} onReset={reset} />
+                  <SuccessScreen orderId={orderId!} email={email} onReset={reset} />
                 )}
               </aside>
             )}

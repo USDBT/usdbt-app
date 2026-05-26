@@ -1,4 +1,4 @@
-import { Client, Databases, IndexType } from 'node-appwrite'
+import { Client, Databases } from 'node-appwrite'
 
 const client = new Client()
   .setEndpoint(process.env.APPWRITE_ENDPOINT ?? 'https://sfo.cloud.appwrite.io/v1')
@@ -8,22 +8,72 @@ const client = new Client()
 const db = new Databases(client)
 const DB_ID = process.env.APPWRITE_DATABASE_ID!
 const ORDERS = 'orders'
+const USERS = 'users'
+const WEBHOOK_EVENTS = process.env.APPWRITE_WEBHOOK_EVENTS_COLLECTION_ID ?? 'webhook_events'
 
 async function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
-async function run() {
+async function ensureCollection(collectionId: string, name: string) {
   try {
-    await db.getCollection(DB_ID, ORDERS)
-    console.log('orders collection already exists — skipping')
-    return
+    await db.getCollection(DB_ID, collectionId)
+    console.log(`${collectionId} collection already exists`)
   } catch {
-    // doesn't exist yet, create it
+    await db.createCollection(DB_ID, collectionId, name, [])
+    console.log(`created ${collectionId} collection`)
   }
+}
 
-  await db.createCollection(DB_ID, ORDERS, 'orders', [])
-  console.log('created orders collection')
+async function ensureStringAttribute(
+  collectionId: string,
+  key: string,
+  size: number,
+  required: boolean
+) {
+  try {
+    await db.createStringAttribute(DB_ID, collectionId, key, size, required)
+    console.log(`created ${collectionId}.${key}`)
+  } catch (err: any) {
+    if (String(err?.message ?? '').toLowerCase().includes('already exists')) return
+    throw err
+  }
+}
+
+async function ensureFloatAttribute(collectionId: string, key: string, required: boolean) {
+  try {
+    await db.createFloatAttribute(DB_ID, collectionId, key, required)
+    console.log(`created ${collectionId}.${key}`)
+  } catch (err: any) {
+    if (String(err?.message ?? '').toLowerCase().includes('already exists')) return
+    throw err
+  }
+}
+
+async function ensureDatetimeAttribute(collectionId: string, key: string, required: boolean) {
+  try {
+    await db.createDatetimeAttribute(DB_ID, collectionId, key, required)
+    console.log(`created ${collectionId}.${key}`)
+  } catch (err: any) {
+    if (String(err?.message ?? '').toLowerCase().includes('already exists')) return
+    throw err
+  }
+}
+
+async function ensureIndex(collectionId: string, key: string, attributes: string[]) {
+  try {
+    await db.createIndex(DB_ID, collectionId, key, 'key', attributes)
+    console.log(`created index ${collectionId}.${key}`)
+  } catch (err: any) {
+    if (String(err?.message ?? '').toLowerCase().includes('already exists')) return
+    throw err
+  }
+}
+
+async function run() {
+  await ensureCollection(ORDERS, 'orders')
+  await ensureCollection(USERS, 'users')
+  await ensureCollection(WEBHOOK_EVENTS, 'webhook_events')
 
   const strAttrs: [string, number, boolean][] = [
     ['walletAddress',    100, true ],
@@ -39,20 +89,32 @@ async function run() {
   ]
 
   for (const [key, size, required] of strAttrs) {
-    await db.createStringAttribute(DB_ID, ORDERS, key, size, required)
+    await ensureStringAttribute(ORDERS, key, size, required)
   }
 
-  await db.createFloatAttribute(DB_ID, ORDERS, 'faceValue',      true)
-  await db.createFloatAttribute(DB_ID, ORDERS, 'paymentAmount',  true)
-  await db.createFloatAttribute(DB_ID, ORDERS, 'feeRate',        true)
-  await db.createDatetimeAttribute(DB_ID, ORDERS, 'expiresAt',   true)
+  await ensureFloatAttribute(ORDERS, 'faceValue', true)
+  await ensureFloatAttribute(ORDERS, 'paymentAmount', true)
+  await ensureFloatAttribute(ORDERS, 'feeRate', true)
+  await ensureDatetimeAttribute(ORDERS, 'expiresAt', true)
+
+  await ensureStringAttribute(USERS, 'walletAddress', 100, true)
+  await ensureStringAttribute(USERS, 'email', 255, true)
+
+  await ensureStringAttribute(WEBHOOK_EVENTS, 'source', 30, true)
+  await ensureStringAttribute(WEBHOOK_EVENTS, 'eventKey', 200, true)
+  await ensureStringAttribute(WEBHOOK_EVENTS, 'providerStatus', 40, false)
+  await ensureStringAttribute(WEBHOOK_EVENTS, 'invoiceId', 100, false)
+  await ensureStringAttribute(WEBHOOK_EVENTS, 'providerOrderId', 100, false)
+  await ensureStringAttribute(WEBHOOK_EVENTS, 'state', 30, true)
 
   console.log('created attributes — waiting for Appwrite to process...')
   await sleep(6000)
 
-  await db.createIndex(DB_ID, ORDERS, 'idx_wallet',        IndexType.Key, ['walletAddress'])
-  await db.createIndex(DB_ID, ORDERS, 'idx_status',        IndexType.Key, ['status'])
-  await db.createIndex(DB_ID, ORDERS, 'idx_wallet_status', IndexType.Key, ['walletAddress', 'status'])
+  await ensureIndex(ORDERS, 'idx_wallet', ['walletAddress'])
+  await ensureIndex(ORDERS, 'idx_status', ['status'])
+  await ensureIndex(ORDERS, 'idx_wallet_status', ['walletAddress', 'status'])
+  await ensureIndex(USERS, 'idx_wallet', ['walletAddress'])
+  await ensureIndex(WEBHOOK_EVENTS, 'idx_event_key', ['eventKey'])
 
   console.log('created indexes')
   console.log('\n✅ DB setup complete')

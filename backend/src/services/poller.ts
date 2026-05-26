@@ -1,6 +1,7 @@
 import { databases, requiredEnv } from '../lib/appwrite'
 import { findIncomingTransfer, currentBlock } from '../lib/chain'
 import { fulfillOrder } from './fulfillment'
+import { ORDER_STATUS } from '../lib/order-status'
 import type { Address } from 'viem'
 
 const DB = requiredEnv('APPWRITE_DATABASE_ID')
@@ -29,7 +30,7 @@ async function checkPendingOrders(): Promise<void> {
   }
 
   const now = new Date()
-  const pending = docs.filter((d: any) => d.status === 'pending_payment')
+  const pending = docs.filter((d: any) => d.status === ORDER_STATUS.PENDING_PAYMENT)
   if (pending.length === 0) return
 
   const active  = pending.filter((d: any) => new Date(d.expiresAt) > now)
@@ -38,7 +39,7 @@ async function checkPendingOrders(): Promise<void> {
   for (const doc of expired) {
     try {
       await databases.updateDocument(DB, COL, doc.$id, {
-        status: 'failed',
+        status: ORDER_STATUS.FAILED,
         failureReason: 'payment window expired',
       })
       console.log(`[poller] expired order ${doc.$id}`)
@@ -82,6 +83,9 @@ async function checkOrder(order: any, fromBlock: bigint): Promise<void> {
 
   console.log(`[poller] payment detected for order ${order.$id} — tx ${match.txHash}`)
 
-  await databases.updateDocument(DB, COL, order.$id, { txHash: match.txHash })
+  await databases.updateDocument(DB, COL, order.$id, {
+    txHash: match.txHash,
+    status: ORDER_STATUS.USER_DEBITED,
+  })
   await fulfillOrder(order.$id)
 }

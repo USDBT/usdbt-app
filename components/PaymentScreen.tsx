@@ -27,7 +27,14 @@ export function PaymentScreen({
     try {
       const status = await getOrderStatus(orderId)
       setOrder(status)
-      if (status.status === 'fulfilled') onSuccess()
+      if (
+        status.status === 'user_debited' ||
+        status.status === 'hot_wallet_funded' ||
+        status.status === 'bitrefill_processing' ||
+        status.status === 'delivered'
+      ) {
+        onSuccess()
+      }
     } catch {
       setError('Could not reach server. Retrying…')
     }
@@ -69,12 +76,15 @@ export function PaymentScreen({
 
   const statusMap: Record<string, string> = {
     pending_payment: 'Waiting for payment…',
-    confirming: 'Payment detected · confirming…',
-    fulfilled: 'Fulfilled!',
+    user_debited: 'Payment detected · preparing your card…',
+    hot_wallet_funded: 'Funding hot wallet…',
+    bitrefill_processing: 'Issuing card with provider…',
+    delivered: 'Card delivered!',
     failed: 'Order failed',
+    refunded: 'Order refunded',
   }
 
-  const isConfirming = order.status === 'confirming'
+  const isConfirming = ['user_debited', 'hot_wallet_funded', 'bitrefill_processing'].includes(order.status)
 
   return (
     <div className="flex flex-col h-full">

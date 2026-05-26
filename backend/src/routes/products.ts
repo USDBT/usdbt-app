@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { listProducts, getProduct } from '../lib/bitrefill'
+import { listProducts, getProduct, getProductImage } from '../lib/bitrefill'
 
 export const productsRouter = Router()
 
@@ -21,5 +21,20 @@ productsRouter.get('/:id', async (req, res) => {
   } catch (err) {
     console.error('[products] get failed:', err)
     res.status(502).json({ error: 'failed to fetch product' })
+  }
+})
+
+productsRouter.get('/:id/image', async (req, res) => {
+  try {
+    const imageRes = await getProductImage(req.params.id)
+    const contentType = imageRes.headers.get('content-type') ?? 'image/png'
+    const cacheControl = imageRes.headers.get('cache-control') ?? 'public, max-age=3600'
+    const ab = await imageRes.arrayBuffer()
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Cache-Control', cacheControl)
+    res.status(200).send(Buffer.from(ab))
+  } catch (err) {
+    console.error('[products] image failed:', err)
+    res.status(404).json({ error: 'image not found' })
   }
 })

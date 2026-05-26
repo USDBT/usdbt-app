@@ -1,23 +1,26 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Loader2, Check } from 'lucide-react'
-import { createOrder, priceLabel, type Product } from '@/lib/api'
+import { X, Check, Minus, Plus } from 'lucide-react'
+import { createOrder, priceLabel, titleize, type Product } from '@/lib/api'
 
 export function OrderForm({
   product,
   walletAddress,
+  prefilledEmail,
   onClose,
   onOrder,
 }: {
   product: Product
   walletAddress: string
+  prefilledEmail?: string
   onClose: () => void
   onOrder: (orderId: string, paymentAddress: string, email: string) => void
 }) {
   const [value, setValue] = useState<number | null>(product.denominations[0] ?? product.range?.min ?? null)
-  const [customValue, setCustomValue] = useState('')
-  const [email, setEmail] = useState('')
+  const [customValue, setCustomValue] = useState(product.range?.min ? String(product.range.min) : '')
+  const [email, setEmail] = useState(prefilledEmail ?? '')
+  const [isPrefilled, setIsPrefilled] = useState(Boolean(prefilledEmail))
   const [activeTab, setActiveTab] = useState<'order' | 'details'>('order')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -27,11 +30,20 @@ export function OrderForm({
   const selectedValue = product.range ? parseFloat(customValue) || 0 : value ?? 0
   const fee = parseFloat((selectedValue * feeRate).toFixed(2))
   const total = parseFloat((selectedValue + fee).toFixed(2))
+  const inRange = product.range ? selectedValue >= product.range.min && selectedValue <= product.range.max : true
+  const emailValid = email.includes('@')
 
   const valid =
     selectedValue > 0 &&
-    email.includes('@') &&
-    (product.range ? selectedValue >= product.range.min && selectedValue <= product.range.max : true)
+    emailValid &&
+    inRange
+
+  function updateVariableAmount(direction: 1 | -1) {
+    if (!product.range) return
+    const step = product.range.step || 1
+    const next = Math.max(product.range.min, Math.min(product.range.max, (selectedValue || product.range.min) + (step * direction)))
+    setCustomValue(String(Number(next.toFixed(2))))
+  }
 
   async function submit() {
     if (!valid) return
@@ -110,6 +122,13 @@ export function OrderForm({
                 </div>
               ) : product.range ? (
                 <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateVariableAmount(-1)}
+                    className="h-9 w-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
+                  >
+                    <Minus size={14} />
+                  </button>
                   <span className="text-gray-400 text-sm">$</span>
                   <input
                     type="number"
@@ -121,8 +140,20 @@ export function OrderForm({
                     placeholder={`${product.range.min}–${product.range.max}`}
                     className="w-28 px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
                   />
+                  <button
+                    type="button"
+                    onClick={() => updateVariableAmount(1)}
+                    className="h-9 w-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
+                  >
+                    <Plus size={14} />
+                  </button>
                 </div>
               ) : null}
+              {product.range && !inRange && (
+                <p className="text-xs text-red-500 mt-2">
+                  Amount must be between ${product.range.min} and ${product.range.max}.
+                </p>
+              )}
             </div>
 
             <div className="border-t border-gray-100" />
@@ -131,9 +162,8 @@ export function OrderForm({
             <div>
               <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Pay with</p>
               <button className="flex items-center gap-2.5 border-2 border-[--color-brand] rounded-xl px-4 py-2.5 bg-[--color-brand-light] w-full">
-                <div className="w-5 h-5 rounded-full bg-[--color-brand] flex items-center justify-center flex-shrink-0">
-                  <span className="text-white text-[9px] font-bold">$</span>
-                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/usdc_logo.png" alt="USDC" className="w-5 h-5 rounded-full object-contain flex-shrink-0" />
                 <span className="text-sm font-semibold text-[--color-brand]">USDC</span>
                 <Check size={14} className="text-[--color-brand] ml-auto" />
               </button>
@@ -144,6 +174,18 @@ export function OrderForm({
             {/* Email */}
             <div>
               <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Delivery email</p>
+              {isPrefilled && (
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Prefilled</span>
+                  <button
+                    type="button"
+                    onClick={() => { setIsPrefilled(false); setEmail('') }}
+                    className="text-[11px] text-gray-500 underline hover:text-gray-700"
+                  >
+                    Use another email
+                  </button>
+                </div>
+              )}
               <input
                 type="email"
                 placeholder="you@example.com"
@@ -151,6 +193,7 @@ export function OrderForm({
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
               />
+              {!emailValid && email.length > 0 && <p className="text-xs text-red-500 mt-2">Enter a valid email address.</p>}
             </div>
 
             {/* Fee breakdown */}
@@ -173,7 +216,8 @@ export function OrderForm({
         ) : (
           <div className="px-5 py-5 space-y-4">
             {[
-              ['Type', product.type || 'Gift Card'],
+              ['Type', titleize(product.type || 'gift_card')],
+              ['Category', titleize(product.categories?.[0] || 'gift_card')],
               ['Country', product.country || '—'],
               ['Currency', product.currency || '—'],
               ['Delivery', 'Email · Instant'],
@@ -196,7 +240,7 @@ export function OrderForm({
             disabled={!valid || loading}
             className="w-full py-3 bg-[--color-brand] hover:bg-[--color-brand-hover] text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
-            {loading && <Loader2 size={14} className="animate-spin" />}
+            {loading && <span className="loading-bar-spinner" aria-hidden="true" />}
             {loading ? 'Creating order…' : 'Continue to payment'}
           </button>
         </div>
