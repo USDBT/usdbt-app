@@ -1,4 +1,4 @@
-import { Query, databases } from '../lib/appwrite'
+import { databases } from '../lib/appwrite'
 import { findIncomingTransfer, currentBlock } from '../lib/chain'
 import { fulfillOrder } from './fulfillment'
 import type { Address } from 'viem'
@@ -19,30 +19,29 @@ export function startPoller(intervalMs = 15_000): void {
 async function checkPendingOrders(): Promise<void> {
   let docs: any[]
   try {
-    // Only filter by status — handle expiry client-side to avoid
-    // range query syntax issues with Appwrite's REST API
-    const result = await databases.listDocuments(DB, COL, [
-      Query.equal('status', 'pending_payment'),
-    ])
-    docs = result.documents
+    // Fetch all docs with no query filter — Appwrite query syntax varies
+    // by version/instance. Filter entirely in memory instead.
+    const result = await databases.listDocuments(DB, COL)
+    docs = result.documents ?? []
   } catch (err) {
-    console.error('[poller] failed to fetch pending orders:', err)
+    console.error('[poller] failed to fetch orders:', err)
     return
   }
 
-  if (docs.length === 0) return
-
   const now = new Date()
-  const active = docs.filter(d => new Date(d.expiresAt) > now)
-  const expired = docs.filter(d => new Date(d.expiresAt) <= now)
+  const pending = docs.filter((d: any) => d.status === 'pending_payment')
+  if (pending.length === 0) return
 
-  // Mark expired orders as failed
+  const active  = pending.filter((d: any) => new Date(d.expiresAt) > now)
+  const expired = pending.filter((d: any) => new Date(d.expiresAt) <= now)
+
   for (const doc of expired) {
     try {
       await databases.updateDocument(DB, COL, doc.$id, {
         status: 'failed',
         failureReason: 'payment window expired',
       })
+      console.log(`[poller] expired order ${doc.$id}`)
     } catch (err) {
       console.error(`[poller] failed to expire order ${doc.$id}:`, err)
     }

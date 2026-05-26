@@ -15,6 +15,8 @@ import { PaymentScreen } from '@/components/PaymentScreen'
 import { SuccessScreen } from '@/components/SuccessScreen'
 import { SplashScreen } from '@/components/SplashScreen'
 import { CommandSearch } from '@/components/CommandSearch'
+import { SettingsDrawer } from '@/components/SettingsDrawer'
+import { HelpDrawer } from '@/components/HelpDrawer'
 import { fetchProducts, type Product } from '@/lib/api'
 
 type Step = 'catalog' | 'configure' | 'payment' | 'success'
@@ -113,6 +115,8 @@ export default function Home() {
   const [search, setSearch] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [allProducts, setAllProducts] = useState<Product[]>([])
 
   useEffect(() => {
@@ -164,12 +168,17 @@ export default function Home() {
         }}
       />
 
+      <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
+
       <div className="flex h-screen overflow-hidden bg-[--color-surface]">
         <Sidebar
           active={view}
           onNavigate={handleNavigate}
           mobileOpen={mobileMenuOpen}
           onMobileClose={() => setMobileMenuOpen(false)}
+          onSettingsClick={() => setSettingsOpen(true)}
+          onHelpClick={() => setHelpOpen(true)}
         />
 
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
