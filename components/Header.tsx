@@ -1,6 +1,7 @@
 'use client'
 
-import { Search, Bell, CreditCard, Activity, DollarSign, LifeBuoy } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Search, Bell, CreditCard, Activity, DollarSign, LifeBuoy, Menu, X } from 'lucide-react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 
 export type Tab = 'cards' | 'activity' | 'spend' | 'support'
@@ -17,47 +18,104 @@ export function Header({
   onSearch,
   activeTab,
   onTabChange,
+  onHamburgerClick,
+  onOpenSearch,
 }: {
   search: string
   onSearch: (v: string) => void
   activeTab: Tab
   onTabChange: (t: Tab) => void
+  onHamburgerClick: () => void
+  onOpenSearch?: () => void
 }) {
+  const [notifOpen, setNotifOpen] = useState(false)
+  const notifRef = useRef<HTMLDivElement>(null)
+
   return (
-    <header className="h-[60px] flex items-center px-5 bg-white border-b border-gray-100 gap-5 flex-shrink-0">
-      {/* Tab group */}
-      <div className="flex items-center gap-1">
+    <header className="h-[60px] flex items-center px-4 bg-white border-b border-gray-100 gap-3 flex-shrink-0 relative">
+      {/* Hamburger — mobile only */}
+      <button
+        onClick={onHamburgerClick}
+        className="md:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-500 flex-shrink-0"
+      >
+        <Menu size={18} />
+      </button>
+
+      {/* Tab pills */}
+      <div className="hidden sm:flex items-center gap-1">
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => onTabChange(id)}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
               activeTab === id
-                ? 'bg-[--color-brand] text-white'
+                ? 'text-white'
                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
             }`}
+            style={activeTab === id ? { backgroundColor: '#2b2bf5' } : undefined}
           >
             <Icon size={14} />
-            {label}
+            <span className="hidden md:inline">{label}</span>
           </button>
         ))}
       </div>
 
-      {/* Right */}
-      <div className="ml-auto flex items-center gap-3">
-        <div className="relative">
+      {/* Right section */}
+      <div className="ml-auto flex items-center gap-2">
+        {/* Desktop search */}
+        <div className="hidden md:block relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search anything..."
+            placeholder="Search… (⌘K)"
             value={search}
             onChange={(e) => onSearch(e.target.value)}
-            className="pl-9 pr-4 py-2 text-sm bg-gray-100 rounded-xl outline-none w-52 focus:bg-white focus:ring-2 focus:ring-[--color-brand] focus:ring-opacity-20 transition-all"
+            onFocus={() => { onOpenSearch?.() }}
+            readOnly={!!onOpenSearch}
+            className="pl-9 pr-4 py-2 text-sm bg-gray-100 rounded-xl outline-none w-44 focus:bg-white transition-all cursor-pointer"
           />
         </div>
-        <button className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-400">
-          <Bell size={17} />
+
+        {/* Mobile search icon */}
+        <button
+          onClick={onOpenSearch}
+          className="md:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-400"
+        >
+          <Search size={17} />
         </button>
+
+        {/* Notifications */}
+        <div className="relative" ref={notifRef}>
+          <button
+            onClick={() => setNotifOpen(o => !o)}
+            className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-400"
+          >
+            <Bell size={17} />
+          </button>
+
+          {notifOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+              <div className="absolute right-0 top-11 z-50 w-72 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                  <span className="text-sm font-semibold text-gray-800">Notifications</span>
+                  <button
+                    onClick={() => setNotifOpen(false)}
+                    className="p-1 rounded-lg hover:bg-gray-100 text-gray-400"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+                <div className="py-12 flex flex-col items-center gap-2">
+                  <Bell size={24} className="text-gray-200" />
+                  <p className="text-sm text-gray-400">No notifications yet</p>
+                  <p className="text-xs text-gray-300">Order updates will appear here</p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
         <ConnectButton accountStatus="avatar" showBalance={false} chainStatus="none" />
       </div>
     </header>

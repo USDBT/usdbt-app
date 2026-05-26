@@ -26,9 +26,9 @@ export const ID = {
 }
 
 export const Query = {
-  equal:       (attr: string, value: unknown) => `equal("${attr}", [${JSON.stringify(value)}])`,
-  greaterThan: (attr: string, value: unknown) => `greaterThan("${attr}", [${JSON.stringify(value)}])`,
-  lessThan:    (attr: string, value: unknown) => `lessThan("${attr}", [${JSON.stringify(value)}])`,
+  equal:       (attr: string, value: unknown) => `equal("${attr}",[${JSON.stringify(value)}])`,
+  greaterThan: (attr: string, value: unknown) => `greaterThan("${attr}",[${JSON.stringify(value)}])`,
+  lessThan:    (attr: string, value: unknown) => `lessThan("${attr}",[${JSON.stringify(value)}])`,
 }
 
 export const databases = {
@@ -51,10 +51,10 @@ export const databases = {
   },
 
   listDocuments(db: string, col: string, queries: string[] = []) {
-    const url = new URL(`${ENDPOINT}/databases/${db}/collections/${col}/documents`)
-    for (const q of queries) {
-      url.searchParams.append('queries[]', q)
-    }
-    return appwriteFetch(url.toString())
+    const base = `${ENDPOINT}/databases/${db}/collections/${col}/documents`
+    if (queries.length === 0) return appwriteFetch(base)
+    // Use literal queries[] key + encodeURIComponent (spaces → %20 not +)
+    const qs = queries.map(q => `queries[]=${encodeURIComponent(q)}`).join('&')
+    return appwriteFetch(`${base}?${qs}`)
   },
 }
