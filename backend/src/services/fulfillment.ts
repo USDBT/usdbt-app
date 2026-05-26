@@ -1,9 +1,9 @@
-import { databases } from '../lib/appwrite'
+import { databases, requiredEnv } from '../lib/appwrite'
 import { createInvoice, payInvoice, getInvoice } from '../lib/bitrefill'
 import { resend } from '../lib/email'
 
-const DB = process.env.APPWRITE_DATABASE_ID!
-const COL = process.env.APPWRITE_ORDERS_COLLECTION_ID!
+const DB = requiredEnv('APPWRITE_DATABASE_ID')
+const COL = requiredEnv('APPWRITE_ORDERS_COLLECTION_ID')
 const FROM = process.env.EMAIL_FROM ?? 'cards@usdbt.us'
 
 export async function fulfillOrder(orderId: string): Promise<void> {

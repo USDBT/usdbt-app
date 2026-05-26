@@ -11,6 +11,24 @@ import { startPoller } from './services/poller'
 const app = express()
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
 
+function logConfigPresence(): void {
+  const requiredNonSecretVars = [
+    'APPWRITE_ENDPOINT',
+    'APPWRITE_PROJECT_ID',
+    'APPWRITE_DATABASE_ID',
+    'APPWRITE_ORDERS_COLLECTION_ID',
+    'APPWRITE_USERS_COLLECTION_ID',
+    'PAYMENT_WALLET_ADDRESS',
+  ] as const
+
+  const missing = requiredNonSecretVars.filter((name) => !process.env[name]?.trim())
+  const set = requiredNonSecretVars.filter((name) => !!process.env[name]?.trim())
+
+  console.log('[config] required env presence:')
+  for (const name of set) console.log(`[config] ${name}=set`)
+  for (const name of missing) console.warn(`[config] ${name}=missing`)
+}
+
 app.use(express.json())
 app.use(
   cors({
@@ -28,6 +46,7 @@ app.use('/balances', balancesRouter)
 
 app.listen(PORT, async () => {
   console.log(`[usdtb-backend] listening on port ${PORT}`)
+  logConfigPresence()
 
   try {
     const res = await fetch(`${process.env.APPWRITE_ENDPOINT}/health`)

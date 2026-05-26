@@ -1,6 +1,12 @@
-const ENDPOINT = process.env.APPWRITE_ENDPOINT!
-const PROJECT  = process.env.APPWRITE_PROJECT_ID!
-const KEY      = process.env.APPWRITE_API_KEY!
+export function requiredEnv(name: string): string {
+  const value = process.env[name]?.trim()
+  if (!value) throw new Error(`[config] Missing required env var: ${name}`)
+  return value
+}
+
+const ENDPOINT = requiredEnv('APPWRITE_ENDPOINT')
+const PROJECT = requiredEnv('APPWRITE_PROJECT_ID')
+const KEY = requiredEnv('APPWRITE_API_KEY')
 
 function headers() {
   return {
@@ -26,9 +32,9 @@ export const ID = {
 }
 
 export const Query = {
-  equal:       (attr: string, value: unknown) => `equal("${attr}",[${JSON.stringify(value)}])`,
-  greaterThan: (attr: string, value: unknown) => `greaterThan("${attr}",[${JSON.stringify(value)}])`,
-  lessThan:    (attr: string, value: unknown) => `lessThan("${attr}",[${JSON.stringify(value)}])`,
+  equal: (attr: string, value: unknown) => `equal("${attr}",${JSON.stringify(Array.isArray(value) ? value : [value])})`,
+  greaterThan: (attr: string, value: unknown) => `greaterThan("${attr}",${JSON.stringify(Array.isArray(value) ? value : [value])})`,
+  lessThan: (attr: string, value: unknown) => `lessThan("${attr}",${JSON.stringify(Array.isArray(value) ? value : [value])})`,
 }
 
 export const databases = {

@@ -1,13 +1,13 @@
 import { Router } from 'express'
-import { ID, databases } from '../lib/appwrite'
+import { ID, databases, requiredEnv } from '../lib/appwrite'
 import { getProduct } from '../lib/bitrefill'
 import { isAddress } from 'viem'
 
 export const ordersRouter = Router()
 
-const DB = process.env.APPWRITE_DATABASE_ID!
-const COL = process.env.APPWRITE_ORDERS_COLLECTION_ID!
-const PAYMENT_ADDRESS = process.env.PAYMENT_WALLET_ADDRESS!
+const DB = requiredEnv('APPWRITE_DATABASE_ID')
+const COL = requiredEnv('APPWRITE_ORDERS_COLLECTION_ID')
+const PAYMENT_ADDRESS = requiredEnv('PAYMENT_WALLET_ADDRESS')
 const ORDER_TTL_MINUTES = 30
 
 ordersRouter.post('/', async (req, res) => {

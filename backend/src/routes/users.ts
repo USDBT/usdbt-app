@@ -1,11 +1,11 @@
 import { Router } from 'express'
-import { ID, databases } from '../lib/appwrite'
+import { ID, databases, requiredEnv } from '../lib/appwrite'
 import { isAddress } from 'viem'
 
 export const usersRouter = Router()
 
-const DB = process.env.APPWRITE_DATABASE_ID!
-const COL = process.env.APPWRITE_USERS_COLLECTION_ID!
+const DB = requiredEnv('APPWRITE_DATABASE_ID')
+const COL = requiredEnv('APPWRITE_USERS_COLLECTION_ID')
 
 usersRouter.get('/:address', async (req, res) => {
   const addr = req.params.address

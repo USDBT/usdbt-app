@@ -1,13 +1,13 @@
-import { databases } from '../lib/appwrite'
+import { databases, requiredEnv } from '../lib/appwrite'
 import { findIncomingTransfer, currentBlock } from '../lib/chain'
 import { fulfillOrder } from './fulfillment'
 import type { Address } from 'viem'
 
-const DB = process.env.APPWRITE_DATABASE_ID!
-const COL = process.env.APPWRITE_ORDERS_COLLECTION_ID!
+const DB = requiredEnv('APPWRITE_DATABASE_ID')
+const COL = requiredEnv('APPWRITE_ORDERS_COLLECTION_ID')
 
 const USDC_ADDRESS = (process.env.USDC_TOKEN_ADDRESS ?? '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913') as Address
-const PAYMENT_WALLET = process.env.PAYMENT_WALLET_ADDRESS as Address
+const PAYMENT_WALLET = requiredEnv('PAYMENT_WALLET_ADDRESS') as Address
 const USDC_DECIMALS = 6
 const LOOK_BACK_BLOCKS = 300n
 
