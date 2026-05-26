@@ -1,8 +1,21 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { X, Check, Minus, Plus } from 'lucide-react'
+import {
+  X, Check, Minus, Plus,
+  DollarSign, CreditCard, Mail,
+  Tag, FolderOpen, Globe, Zap, ShieldCheck,
+} from 'lucide-react'
 import { createOrder, getWalletBalances, priceLabel, titleize, type Product } from '@/lib/api'
+
+function SectionLabel({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
+  return (
+    <div className="flex items-center gap-1.5 mb-3">
+      <Icon size={12} className="text-gray-400" />
+      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">{text}</p>
+    </div>
+  )
+}
 
 export function OrderForm({
   product,
@@ -17,7 +30,6 @@ export function OrderForm({
   onClose: () => void
   onOrder: (orderId: string, paymentAddress: string, email: string) => void
 }) {
-  const [value, setValue] = useState<number | null>(product.denominations[0] ?? product.range?.min ?? null)
   const [customValue, setCustomValue] = useState(product.range?.min ? String(product.range.min) : '')
   const [fixedInput, setFixedInput] = useState(product.denominations[0] ? String(product.denominations[0]) : '')
   const [email, setEmail] = useState(prefilledEmail ?? '')
@@ -34,6 +46,7 @@ export function OrderForm({
     () => [...product.denominations].filter((n) => Number.isFinite(n)).sort((a, b) => a - b),
     [product.denominations],
   )
+
   const selectedValue = product.range ? parseFloat(customValue) || 0 : parseFloat(fixedInput) || 0
   const fee = parseFloat((selectedValue * feeRate).toFixed(2))
   const total = parseFloat((selectedValue + fee).toFixed(2))
@@ -42,12 +55,7 @@ export function OrderForm({
   const fixedValid = product.range ? true : sortedDenominations.includes(selectedValue)
   const hasEnoughBalance = usdcBalance === null ? true : usdcBalance >= total
 
-  const valid =
-    selectedValue > 0 &&
-    emailValid &&
-    inRange &&
-    fixedValid &&
-    hasEnoughBalance
+  const valid = selectedValue > 0 && emailValid && inRange && fixedValid && hasEnoughBalance
 
   useEffect(() => {
     let cancelled = false
@@ -67,22 +75,22 @@ export function OrderForm({
     return () => { cancelled = true }
   }, [walletAddress])
 
-  function updateVariableAmount(direction: 1 | -1) {
-    if (!product.range) return
-    const step = product.range.step || 1
-    const next = Math.max(product.range.min, Math.min(product.range.max, (selectedValue || product.range.min) + (step * direction)))
-    setCustomValue(String(Number(next.toFixed(2))))
-  }
-
-  function updateFixedAmount(direction: 1 | -1) {
+  function stepFixed(dir: 1 | -1) {
     if (sortedDenominations.length === 0) return
     const current = parseFloat(fixedInput) || sortedDenominations[0]
-    const currentIdx = sortedDenominations.findIndex((d) => d === current)
-    const fallbackIdx = currentIdx >= 0 ? currentIdx : 0
-    const nextIdx = Math.max(0, Math.min(sortedDenominations.length - 1, fallbackIdx + direction))
-    const next = sortedDenominations[nextIdx]
-    setValue(next)
+    const idx = sortedDenominations.findIndex(d => d === current)
+    const fallback = idx >= 0 ? idx : 0
+    const next = sortedDenominations[Math.max(0, Math.min(sortedDenominations.length - 1, fallback + dir))]
     setFixedInput(String(next))
+  }
+
+  function stepVariable(dir: 1 | -1) {
+    if (!product.range) return
+    const step = product.range.step || 1
+    const next = Math.max(product.range.min, Math.min(product.range.max,
+      (parseFloat(customValue) || product.range.min) + step * dir,
+    ))
+    setCustomValue(String(Number(next.toFixed(2))))
   }
 
   async function submit() {
@@ -99,15 +107,25 @@ export function OrderForm({
     }
   }
 
+  const DETAILS = [
+    { icon: Tag,        label: 'Type',     value: titleize(product.type || 'gift_card') },
+    { icon: FolderOpen, label: 'Category', value: titleize(product.categories?.[0] || 'gift_card') },
+    { icon: Globe,      label: 'Country',  value: product.country || '—' },
+    { icon: DollarSign, label: 'Currency', value: product.currency || '—' },
+    { icon: Zap,        label: 'Delivery', value: 'Email · Instant' },
+    { icon: ShieldCheck,label: 'KYC',      value: 'None required' },
+  ]
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+      <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-start justify-between mb-4">
           <div className="w-10 h-10 rounded-xl bg-[--color-brand-light] flex items-center justify-center overflow-hidden flex-shrink-0">
             {product.image ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={product.image} alt="" className="w-full h-full object-contain p-1" />
+              <img src={product.image} alt="" className="w-full h-full object-contain p-1"
+                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
             ) : (
               <span className="text-[--color-brand] font-bold text-lg">{product.name[0]}</span>
             )}
@@ -121,7 +139,7 @@ export function OrderForm({
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-100 px-5">
+      <div className="flex border-b border-gray-100 px-5 flex-shrink-0">
         {(['order', 'details'] as const).map((tab) => (
           <button
             key={tab}
@@ -143,83 +161,68 @@ export function OrderForm({
           <div className="px-5 py-5 space-y-5">
             {/* Amount */}
             <div>
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Amount</p>
+              <SectionLabel icon={DollarSign} text="Amount" />
               {product.denominations.length > 0 ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => updateFixedAmount(-1)}
-                      className="h-9 w-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
-                    >
-                      <Minus size={14} />
-                    </button>
-                    <input
-                      type="number"
-                      value={fixedInput}
-                      onChange={(e) => { setFixedInput(e.target.value); setValue(parseFloat(e.target.value) || null) }}
-                      className="flex-1 px-3 py-2 text-center text-sm border border-gray-200 rounded-lg outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => updateFixedAmount(1)}
-                      className="h-9 w-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {sortedDenominations.slice(0, 8).map((d) => (
-                      <button
-                        key={d}
-                        onClick={() => { setValue(d); setFixedInput(String(d)) }}
-                        className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
-                          selectedValue === d
-                            ? 'bg-[--color-brand] border-[--color-brand] text-white'
-                            : 'border-gray-200 bg-white text-gray-600 hover:border-[--color-brand]'
-                        }`}
-                      >
-                        ${d}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : product.range ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-stretch gap-2">
                   <button
                     type="button"
-                    onClick={() => updateVariableAmount(-1)}
-                    className="h-9 w-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
+                    onClick={() => stepFixed(-1)}
+                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all"
                   >
-                    <Minus size={14} />
+                    <Minus size={16} />
                   </button>
-                  <span className="text-gray-400 text-sm">$</span>
                   <input
                     type="number"
-                    min={product.range.min}
-                    max={product.range.max}
-                    step={product.range.step}
-                    value={customValue}
-                    onChange={(e) => setCustomValue(e.target.value)}
-                    placeholder={`${product.range.min}–${product.range.max}`}
-                    className="w-28 px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
+                    value={fixedInput}
+                    onChange={(e) => setFixedInput(e.target.value)}
+                    className="flex-1 h-12 px-3 text-center text-base font-semibold border-2 border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
                   />
                   <button
                     type="button"
-                    onClick={() => updateVariableAmount(1)}
-                    className="h-9 w-9 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50"
+                    onClick={() => stepFixed(1)}
+                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all"
                   >
-                    <Plus size={14} />
+                    <Plus size={16} />
+                  </button>
+                </div>
+              ) : product.range ? (
+                <div className="flex items-stretch gap-2">
+                  <button
+                    type="button"
+                    onClick={() => stepVariable(-1)}
+                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all"
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <div className="flex-1 relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
+                    <input
+                      type="number"
+                      min={product.range.min}
+                      max={product.range.max}
+                      step={product.range.step}
+                      value={customValue}
+                      onChange={(e) => setCustomValue(e.target.value)}
+                      placeholder={String(product.range.min)}
+                      className="w-full h-12 pl-7 pr-3 text-center text-base font-semibold border-2 border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => stepVariable(1)}
+                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all"
+                  >
+                    <Plus size={16} />
                   </button>
                 </div>
               ) : null}
-              {product.range && !inRange && (
+              {product.range && !inRange && selectedValue > 0 && (
                 <p className="text-xs text-red-500 mt-2">
-                  Amount must be between ${product.range.min} and ${product.range.max}.
+                  Amount must be ${product.range.min}–${product.range.max}
                 </p>
               )}
-              {!product.range && !fixedValid && (
-                <p className="text-xs text-red-500 mt-2">Amount must match a valid denomination for this card.</p>
+              {!product.range && !fixedValid && selectedValue > 0 && (
+                <p className="text-xs text-red-500 mt-2">Not a valid denomination for this card.</p>
               )}
             </div>
 
@@ -227,7 +230,7 @@ export function OrderForm({
 
             {/* Pay with */}
             <div>
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Pay with</p>
+              <SectionLabel icon={CreditCard} text="Pay with" />
               <button className="flex items-center gap-2.5 border-2 border-[--color-brand] rounded-xl px-4 py-2.5 bg-[--color-brand-light] w-full">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/usdc_logo.png" alt="USDC" className="w-5 h-5 rounded-full object-contain flex-shrink-0" />
@@ -240,7 +243,7 @@ export function OrderForm({
 
             {/* Email */}
             <div>
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Delivery email</p>
+              <SectionLabel icon={Mail} text="Delivery email" />
               {isPrefilled && (
                 <div className="mb-2 flex items-center gap-2">
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Prefilled</span>
@@ -260,7 +263,9 @@ export function OrderForm({
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
               />
-              {!emailValid && email.length > 0 && <p className="text-xs text-red-500 mt-2">Enter a valid email address.</p>}
+              {!emailValid && email.length > 0 && (
+                <p className="text-xs text-red-500 mt-2">Enter a valid email address.</p>
+              )}
             </div>
 
             {/* Fee breakdown */}
@@ -277,12 +282,12 @@ export function OrderForm({
                 </div>
                 <div className={`text-xs ${hasEnoughBalance ? 'text-emerald-600' : 'text-red-500'}`}>
                   {balancesLoading
-                    ? 'Checking wallet balance...'
+                    ? 'Checking wallet balance…'
                     : usdcBalance === null
                       ? 'Could not verify wallet balance right now.'
                       : hasEnoughBalance
                         ? `Balance OK: ${usdcBalance.toFixed(2)} USDC available`
-                        : `Insufficient balance: ${usdcBalance.toFixed(2)} USDC available`}
+                        : `Insufficient: ${usdcBalance.toFixed(2)} USDC available`}
                 </div>
               </div>
             )}
@@ -290,18 +295,14 @@ export function OrderForm({
             {error && <p className="text-red-500 text-xs">{error}</p>}
           </div>
         ) : (
-          <div className="px-5 py-5 space-y-4">
-            {[
-              ['Type', titleize(product.type || 'gift_card')],
-              ['Category', titleize(product.categories?.[0] || 'gift_card')],
-              ['Country', product.country || '—'],
-              ['Currency', product.currency || '—'],
-              ['Delivery', 'Email · Instant'],
-              ['KYC', 'None required'],
-            ].map(([label, val]) => (
-              <div key={label} className="flex justify-between text-sm">
-                <span className="text-gray-400">{label}</span>
-                <span className="font-medium text-gray-700">{val}</span>
+          <div className="px-5 py-5 space-y-3">
+            {DETAILS.map(({ icon: Icon, label, value }) => (
+              <div key={label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Icon size={13} />
+                  <span className="text-sm">{label}</span>
+                </div>
+                <span className="text-sm font-medium text-gray-700">{value}</span>
               </div>
             ))}
           </div>
@@ -310,7 +311,7 @@ export function OrderForm({
 
       {/* Footer CTA */}
       {activeTab === 'order' && (
-        <div className="px-5 py-4 border-t border-gray-100">
+        <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0">
           <button
             onClick={submit}
             disabled={!valid || loading}

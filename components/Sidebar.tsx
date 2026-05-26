@@ -125,6 +125,7 @@ function SidebarContent({
   onBalanceClick,
   shopExpanded,
   onShopToggle,
+  onSubCategorySelect,
 }: {
   active: View
   onNavigate: (v: View) => void
@@ -134,6 +135,7 @@ function SidebarContent({
   onBalanceClick?: () => void
   shopExpanded: boolean
   onShopToggle: () => void
+  onSubCategorySelect?: (label: string) => void
 }) {
   function handleNavClick(id: View) {
     if (id === 'shop') onShopToggle()
@@ -183,7 +185,7 @@ function SidebarContent({
                 {SHOP_SUBS.map(({ label: sub, icon: SubIcon }) => (
                   <button
                     key={sub}
-                    onClick={() => { onNavigate('shop'); onClose?.() }}
+                    onClick={() => { onSubCategorySelect?.(sub); onNavigate('shop'); onClose?.() }}
                     className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
                   >
                     <SubIcon size={12} className="text-gray-400 flex-shrink-0" />
@@ -241,6 +243,7 @@ export function Sidebar({
   onMobileClose,
   onSettingsClick,
   onHelpClick,
+  onSubCategorySelect,
 }: {
   active: View
   onNavigate: (v: View) => void
@@ -248,6 +251,7 @@ export function Sidebar({
   onMobileClose?: () => void
   onSettingsClick?: () => void
   onHelpClick?: () => void
+  onSubCategorySelect?: (label: string) => void
 }) {
   const [shopExpanded, setShopExpanded] = useState(false)
   const [balanceOpen, setBalanceOpen] = useState(false)
@@ -266,6 +270,7 @@ export function Sidebar({
           onBalanceClick={() => setBalanceOpen(true)}
           shopExpanded={shopExpanded}
           onShopToggle={() => setShopExpanded(e => !e)}
+          onSubCategorySelect={onSubCategorySelect}
         />
       </aside>
 
@@ -293,6 +298,7 @@ export function Sidebar({
           onBalanceClick={() => { setBalanceOpen(true); onMobileClose?.() }}
           shopExpanded={shopExpanded}
           onShopToggle={() => setShopExpanded(e => !e)}
+          onSubCategorySelect={onSubCategorySelect}
         />
       </div>
     </>

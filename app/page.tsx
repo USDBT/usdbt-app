@@ -22,17 +22,26 @@ import { EmailCaptureModal } from '@/components/EmailCaptureModal'
 import { fetchProducts, getOrderProgress, type Product, type OrderProgress } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
 import { getStoredEmail, storeEmail, authHeaders, clearToken, getValidToken } from '@/lib/auth'
+import { getSavedCards, toggleSavedCard } from '@/lib/savedCards'
 
 type Step = 'catalog' | 'configure' | 'payment' | 'success'
 
-const CATEGORIES = [
-  { label: 'Gift Cards',  icon: Gift,        count: '200+' },
-  { label: 'Gaming',      icon: Gamepad2,    count: '40+' },
-  { label: 'Streaming',   icon: Tv,          count: '15+' },
-  { label: 'Travel',      icon: Plane,       count: '12+' },
-  { label: 'Food',        icon: Utensils,    count: '20+' },
-  { label: 'Shopping',    icon: ShoppingCart,count: '30+' },
+const CATEGORY_DEFS = [
+  { label: 'Gift Cards',  icon: Gift,         keywords: [] as string[] },
+  { label: 'Gaming',      icon: Gamepad2,     keywords: ['game', 'gaming', 'steam', 'xbox', 'playstation', 'nintendo', 'roblox', 'blizzard', 'battle'] },
+  { label: 'Streaming',   icon: Tv,           keywords: ['netflix', 'hulu', 'disney', 'hbo', 'spotify', 'youtube', 'twitch', 'deezer', 'apple music', 'prime'] },
+  { label: 'Travel',      icon: Plane,        keywords: ['airbnb', 'uber', 'expedia', 'booking', 'hotel', 'airline', 'flight', 'lyft'] },
+  { label: 'Food',        icon: Utensils,     keywords: ['doordash', 'grubhub', 'starbucks', 'mcdonald', 'domino', 'pizza', 'dining', 'ubereats', 'seamless', 'chipotle'] },
+  { label: 'Shopping',    icon: ShoppingCart, keywords: ['amazon', 'walmart', 'target', 'ebay', 'bestbuy', 'clothing', 'fashion', 'nordstrom', 'shein'] },
 ]
+
+function countForCategory(label: string, keywords: string[], products: Product[]): number {
+  if (label === 'Gift Cards') return products.length
+  return products.filter((p) => {
+    const haystack = [p.name, ...(p.categories ?? []), p.type ?? ''].join(' ').toLowerCase()
+    return haystack.includes(label.toLowerCase()) || keywords.some((kw) => haystack.includes(kw))
+  }).length
+}
 
 function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
   return (
@@ -81,24 +90,92 @@ function ReferView() {
   )
 }
 
-function CategoriesView({ onNavigate }: { onNavigate: (v: View) => void }) {
+function CategoriesView({
+  onNavigate,
+  onSubCategorySelect,
+  products,
+}: {
+  onNavigate: (v: View) => void
+  onSubCategorySelect: (label: string) => void
+  products: Product[]
+}) {
   return (
     <div className="px-5 py-5">
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-4">
         <h2 className="text-sm font-semibold text-gray-800 mb-4">Browse by Category</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {CATEGORIES.map(({ label, icon: Icon, count }) => (
-            <button
-              key={label}
-              onClick={() => onNavigate('shop')}
-              className="flex flex-col items-start p-4 rounded-xl border border-gray-100 hover:border-gray-300 hover:shadow-sm transition-all bg-white text-left"
-            >
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: '#eef0ff' }}>
-                <Icon size={18} style={{ color: '#2b2bf5' }} />
-              </div>
-              <p className="text-sm font-medium text-gray-800">{label}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{count} cards</p>
-            </button>
+          {CATEGORY_DEFS.map(({ label, icon: Icon, keywords }) => {
+            const count = countForCategory(label, keywords, products)
+            return (
+              <button
+                key={label}
+                onClick={() => { onSubCategorySelect(label); onNavigate('shop') }}
+                className="flex flex-col items-start p-4 rounded-xl border border-gray-100 hover:border-gray-300 hover:shadow-sm transition-all bg-white text-left"
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: '#eef0ff' }}>
+                  <Icon size={18} style={{ color: '#2b2bf5' }} />
+                </div>
+                <p className="text-sm font-medium text-gray-800">{label}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{count > 0 ? `${count} cards` : '…'}</p>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SavedView({
+  savedCards,
+  onSelect,
+  onToggleSave,
+}: {
+  savedCards: Product[]
+  onSelect: (p: Product) => void
+  onToggleSave: (p: Product) => void
+}) {
+  if (savedCards.length === 0) {
+    return (
+      <EmptyState
+        icon={Bookmark}
+        title="No saved cards"
+        sub="Save your favorite gift cards for quick access. Tap the bookmark icon on any card."
+      />
+    )
+  }
+
+  return (
+    <div className="px-5 py-5">
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <h2 className="text-sm font-semibold text-gray-800 mb-4">Saved Cards</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+          {savedCards.map((p) => (
+            <div key={p.id} className="relative border border-gray-100 rounded-xl p-3.5 bg-white hover:border-gray-300 hover:shadow-sm transition-all flex flex-col">
+              <button
+                onClick={() => onToggleSave(p)}
+                className="absolute top-2.5 right-2.5 p-1 rounded-md transition-colors z-10"
+                aria-label="Unsave"
+              >
+                <Bookmark size={13} className="fill-[#2b2bf5] text-[#2b2bf5]" />
+              </button>
+              <button onClick={() => onSelect(p)} className="flex flex-col flex-1 text-left w-full">
+                <div className="w-full h-20 rounded-xl mb-3 overflow-hidden bg-gray-50 flex items-center justify-center">
+                  {p.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.image} alt={p.name} className="w-full h-full object-contain p-1.5"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                  ) : (
+                    <span className="text-2xl font-bold text-gray-300">{p.name[0]}</span>
+                  )}
+                </div>
+                <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{p.name}</p>
+                <p className="text-xs text-gray-400 mt-1">{p.country || 'Global'}</p>
+                <p className="text-xs text-gray-500 mt-auto pt-2">{
+                  p.denominations.length > 0 ? `From $${Math.min(...p.denominations)}` : p.range ? `$${p.range.min}–$${p.range.max}` : 'Variable'
+                }</p>
+              </button>
+            </div>
           ))}
         </div>
       </div>
@@ -425,6 +502,8 @@ export default function Home() {
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [savedEmail, setSavedEmail] = useState('')
+  const [savedCards, setSavedCards] = useState<Product[]>(() => getSavedCards())
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
 
   useEffect(() => {
     fetchProducts().then(setAllProducts).catch(() => {})
@@ -492,10 +571,19 @@ export default function Home() {
     setEmail('')
   }
 
+  function handleToggleSave(p: Product) {
+    setSavedCards(toggleSavedCard(p))
+  }
+
+  function handleSubCategorySelect(label: string) {
+    setCategoryFilter(label === 'Gift Cards' ? null : label)
+  }
+
   function handleNavigate(v: View) {
     setView(v)
     reset()
     setSearch('')
+    if (v !== 'shop') setCategoryFilter(null)
   }
 
   function handleTabChange(tab: Tab) {
@@ -543,6 +631,7 @@ export default function Home() {
           onMobileClose={() => setMobileMenuOpen(false)}
           onSettingsClick={() => setSettingsOpen(true)}
           onHelpClick={() => setHelpOpen(true)}
+          onSubCategorySelect={handleSubCategorySelect}
         />
 
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
@@ -578,6 +667,9 @@ export default function Home() {
                       search={search}
                       selectedProduct={product}
                       onSelect={(p) => { setProduct(p); setStep('configure') }}
+                      savedIds={new Set(savedCards.map((c) => c.id))}
+                      onToggleSave={handleToggleSave}
+                      categoryFilter={categoryFilter}
                     />
                   </div>
                 ) : activeTab === 'activity' ? (
@@ -590,21 +682,28 @@ export default function Home() {
                       search={search}
                       selectedProduct={product}
                       onSelect={(p) => { setProduct(p); setStep('configure') }}
+                      savedIds={new Set(savedCards.map((c) => c.id))}
+                      onToggleSave={handleToggleSave}
+                      categoryFilter={categoryFilter}
                     />
                   </div>
                 )
               ) : view === 'orders' ? (
                 <OrdersView orderId={orderId} />
               ) : view === 'saved' ? (
-                <EmptyState
-                  icon={Bookmark}
-                  title="No saved cards"
-                  sub="Save your favorite gift cards for quick access. Tap the bookmark icon on any card."
+                <SavedView
+                  savedCards={savedCards}
+                  onSelect={(p) => { setProduct(p); setStep('configure'); setView('shop') }}
+                  onToggleSave={handleToggleSave}
                 />
               ) : view === 'refer' ? (
                 <ReferView />
               ) : view === 'categories' ? (
-                <CategoriesView onNavigate={handleNavigate} />
+                <CategoriesView
+                  onNavigate={handleNavigate}
+                  onSubCategorySelect={handleSubCategorySelect}
+                  products={allProducts}
+                />
               ) : null}
             </main>
 
@@ -620,7 +719,7 @@ export default function Home() {
                 /* mobile: bottom sheet */
                 'fixed inset-x-0 bottom-0 z-50 rounded-t-2xl shadow-2xl max-h-[92vh]',
                 /* desktop: right panel */
-                'md:relative md:inset-auto md:z-auto md:rounded-none md:max-h-none md:shadow-none md:border-l md:border-gray-100 md:w-[280px]',
+                'md:relative md:inset-auto md:z-auto md:rounded-none md:max-h-none md:shadow-none md:border-l md:border-gray-100 md:w-[400px]',
               ].join(' ')}>
                 {/* Drag handle (mobile only) */}
                 <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3 md:hidden flex-shrink-0" />

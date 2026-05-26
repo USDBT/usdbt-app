@@ -1,8 +1,28 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, MoreHorizontal, LayoutGrid, List, CreditCard } from 'lucide-react'
+import { Loader2, MoreHorizontal, LayoutGrid, List, CreditCard, Bookmark } from 'lucide-react'
 import { fetchProducts, priceLabel, titleize, type Product } from '@/lib/api'
+
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  'gaming':    ['game', 'gaming', 'steam', 'xbox', 'playstation', 'nintendo', 'roblox', 'blizzard', 'battle'],
+  'streaming': ['netflix', 'hulu', 'disney', 'hbo', 'spotify', 'youtube', 'twitch', 'deezer', 'apple music', 'prime'],
+  'travel':    ['airbnb', 'uber', 'expedia', 'booking', 'hotel', 'airline', 'flight', 'lyft'],
+  'food':      ['doordash', 'grubhub', 'starbucks', 'mcdonald', 'domino', 'pizza', 'dining', 'ubereats', 'seamless', 'chipotle'],
+  'shopping':  ['amazon', 'walmart', 'target', 'ebay', 'bestbuy', 'clothing', 'fashion', 'nordstrom', 'shein'],
+}
+
+function productMatchesCategory(p: Product, cat: string | null | undefined): boolean {
+  if (!cat || cat === 'Gift Cards') return true
+  const lower = cat.toLowerCase()
+  const haystack = [
+    p.name.toLowerCase(),
+    ...(p.categories ?? []).map((c) => c.toLowerCase()),
+    (p.type ?? '').toLowerCase(),
+  ].join(' ')
+  if (haystack.includes(lower)) return true
+  return (CATEGORY_KEYWORDS[lower] ?? []).some((kw) => haystack.includes(kw))
+}
 
 const FEATURED = ['Amazon', 'Netflix', 'Steam', 'Google Play']
 
@@ -45,10 +65,16 @@ export function CardCatalog({
   search,
   selectedProduct,
   onSelect,
+  savedIds,
+  onToggleSave,
+  categoryFilter,
 }: {
   search: string
   selectedProduct: Product | null
   onSelect: (p: Product) => void
+  savedIds?: Set<string>
+  onToggleSave?: (p: Product) => void
+  categoryFilter?: string | null
 }) {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -104,6 +130,7 @@ export function CardCatalog({
       if (category === 'fixed') return !p.range
       return !!p.range
     })
+    .filter((p) => productMatchesCategory(p, categoryFilter))
     .sort((a, b) => {
       if (sortBy === 'name_desc') return b.name.localeCompare(a.name)
       return a.name.localeCompare(b.name)
@@ -114,7 +141,7 @@ export function CardCatalog({
 
   useEffect(() => {
     setUiPage(1)
-  }, [search, category, sortBy, products.length])
+  }, [search, category, sortBy, products.length, categoryFilter])
 
   if (loading) {
     return (
@@ -166,7 +193,7 @@ export function CardCatalog({
           <div className="flex items-center gap-1 text-sm">
             <span className="text-gray-400">All Cards</span>
             <span className="text-gray-300 mx-1">/</span>
-            <span className="font-medium text-gray-700">Gift Cards</span>
+            <span className="font-medium text-gray-700">{categoryFilter || 'Gift Cards'}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center gap-1 mr-1">
@@ -217,42 +244,55 @@ export function CardCatalog({
               </tr>
             </thead>
             <tbody>
-              {paged.map((p) => (
-                <tr
-                  key={p.id}
-                  onClick={() => onSelect(p)}
-                  className={`border-b border-gray-50 cursor-pointer transition-colors ${
-                    selectedProduct?.id === p.id
-                      ? 'bg-[--color-brand-light]'
-                      : 'hover:bg-[#f8f9fb]'
-                  }`}
-                >
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <ProductThumb product={p} className="w-7 h-7 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" />
-                      <span className="text-sm font-medium text-gray-800">{p.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{categoryLabel(p)}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">
-                    <div>{priceLabel(p)}</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">{maxValueLabel(p)}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 font-medium">
-                      {brandType(p.denominations, p.range)}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onSelect(p) }}
-                      className="p-1 rounded-md text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
-                    >
-                      <MoreHorizontal size={15} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {paged.map((p) => {
+                const isSaved = savedIds?.has(p.id) ?? false
+                return (
+                  <tr
+                    key={p.id}
+                    onClick={() => onSelect(p)}
+                    className={`border-b border-gray-50 cursor-pointer transition-colors ${
+                      selectedProduct?.id === p.id
+                        ? 'bg-[--color-brand-light]'
+                        : 'hover:bg-[#f8f9fb]'
+                    }`}
+                  >
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <ProductThumb product={p} className="w-7 h-7 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" />
+                        <span className="text-sm font-medium text-gray-800">{p.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">{categoryLabel(p)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      <div>{priceLabel(p)}</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">{maxValueLabel(p)}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 font-medium">
+                        {brandType(p.denominations, p.range)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {onToggleSave && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onToggleSave(p) }}
+                            className="p-1 rounded-md text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+                          >
+                            <Bookmark size={14} className={isSaved ? 'fill-[#2b2bf5] text-[#2b2bf5]' : ''} />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onSelect(p) }}
+                          className="p-1 rounded-md text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+                        >
+                          <MoreHorizontal size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={5} className="text-center py-16 text-gray-400 text-sm">
@@ -264,28 +304,41 @@ export function CardCatalog({
           </table>
         ) : (
           <div className="p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-            {paged.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => onSelect(p)}
-                className={`text-left p-3.5 rounded-xl border transition-all min-h-[170px] flex flex-col ${
-                  selectedProduct?.id === p.id
-                    ? 'border-[--color-brand] bg-[--color-brand-light]'
-                    : 'border-gray-100 bg-white hover:border-gray-300 hover:shadow-sm'
-                }`}
-              >
-                <ProductThumb product={p} className="w-full h-24 rounded-xl mb-3 overflow-hidden" />
-                <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{p.name}</p>
-                <p className="text-xs text-gray-400 mt-1">{categoryLabel(p)}</p>
-                <div className="mt-auto pt-2">
-                  <p className="text-xs text-gray-500">{priceLabel(p)}</p>
-                  <p className="text-[10px] text-gray-400 mt-1">{maxValueLabel(p)}</p>
-                  <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
-                    {brandType(p.denominations, p.range)}
-                  </span>
+            {paged.map((p) => {
+              const isSaved = savedIds?.has(p.id) ?? false
+              return (
+                <div
+                  key={p.id}
+                  className={`relative text-left p-3.5 rounded-xl border transition-all min-h-[170px] flex flex-col ${
+                    selectedProduct?.id === p.id
+                      ? 'border-[--color-brand] bg-[--color-brand-light]'
+                      : 'border-gray-100 bg-white hover:border-gray-300 hover:shadow-sm'
+                  }`}
+                >
+                  {onToggleSave && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onToggleSave(p) }}
+                      className="absolute top-2.5 right-2.5 p-1 rounded-md text-gray-300 hover:text-gray-600 transition-colors z-10"
+                      aria-label={isSaved ? 'Unsave' : 'Save'}
+                    >
+                      <Bookmark size={13} className={isSaved ? 'fill-[#2b2bf5] text-[#2b2bf5]' : ''} />
+                    </button>
+                  )}
+                  <button onClick={() => onSelect(p)} className="flex flex-col flex-1 text-left w-full">
+                    <ProductThumb product={p} className="w-full h-24 rounded-xl mb-3 overflow-hidden" />
+                    <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{p.name}</p>
+                    <p className="text-xs text-gray-400 mt-1">{categoryLabel(p)}</p>
+                    <div className="mt-auto pt-2">
+                      <p className="text-xs text-gray-500">{priceLabel(p)}</p>
+                      <p className="text-[10px] text-gray-400 mt-1">{maxValueLabel(p)}</p>
+                      <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
+                        {brandType(p.denominations, p.range)}
+                      </span>
+                    </div>
+                  </button>
                 </div>
-              </button>
-            ))}
+              )
+            })}
           </div>
         )}
 
