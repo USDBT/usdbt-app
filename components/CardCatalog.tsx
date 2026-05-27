@@ -44,14 +44,31 @@ function maxValueLabel(p: Product): string {
 }
 
 function ProductThumb({ product, className }: { product: Product; className?: string }) {
-  const [failed, setFailed] = useState(false)
-  const showImage = !!product.image && !failed
+  const [attempt, setAttempt] = useState(0)
+
+  const srcs = (() => {
+    if (!product.image) return []
+    const domain = product.image.replace('https://logo.clearbit.com/', '')
+    const isDomain = !domain.startsWith('http') && domain.includes('.')
+    return [
+      product.image,
+      isDomain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : '',
+    ].filter(Boolean) as string[]
+  })()
+
+  const src = srcs[attempt]
+  const exhausted = attempt >= srcs.length
 
   return (
     <div className={className}>
-      {showImage ? (
+      {src && !exhausted ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={product.image} alt={product.name} className="w-full h-full object-contain p-1.5" onError={() => setFailed(true)} />
+        <img
+          src={src}
+          alt={product.name}
+          className="w-full h-full object-contain p-1.5"
+          onError={() => setAttempt((a) => a + 1)}
+        />
       ) : (
         <div className="w-full h-full rounded-[inherit] bg-gradient-to-br from-slate-100 via-slate-200 to-blue-100 border border-slate-200 flex items-center justify-center">
           <CreditCard size={18} className="text-slate-500" />
@@ -309,7 +326,7 @@ export function CardCatalog({
               return (
                 <div
                   key={p.id}
-                  className={`relative text-left p-3.5 rounded-xl border transition-all min-h-[170px] flex flex-col ${
+                  className={`relative text-left p-3.5 rounded-xl border transition-all min-h-[130px] flex flex-col ${
                     selectedProduct?.id === p.id
                       ? 'border-[--color-brand] bg-[--color-brand-light]'
                       : 'border-gray-100 bg-white hover:border-gray-300 hover:shadow-sm'
@@ -318,20 +335,19 @@ export function CardCatalog({
                   {onToggleSave && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onToggleSave(p) }}
-                      className="absolute top-2.5 right-2.5 p-1 rounded-md text-gray-300 hover:text-gray-600 transition-colors z-10"
+                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/80 hover:bg-white shadow-sm transition-colors z-10"
                       aria-label={isSaved ? 'Unsave' : 'Save'}
                     >
-                      <Bookmark size={13} className={isSaved ? 'fill-[#2b2bf5] text-[#2b2bf5]' : ''} />
+                      <Bookmark size={15} className={isSaved ? 'fill-[#2b2bf5] text-[#2b2bf5]' : 'text-gray-400'} />
                     </button>
                   )}
                   <button onClick={() => onSelect(p)} className="flex flex-col flex-1 text-left w-full">
-                    <ProductThumb product={p} className="w-full h-24 rounded-xl mb-3 overflow-hidden" />
+                    <ProductThumb product={p} className="w-10 h-10 rounded-xl mb-3 overflow-hidden flex-shrink-0" />
                     <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{p.name}</p>
                     <p className="text-xs text-gray-400 mt-1">{categoryLabel(p)}</p>
                     <div className="mt-auto pt-2">
                       <p className="text-xs text-gray-500">{priceLabel(p)}</p>
-                      <p className="text-[10px] text-gray-400 mt-1">{maxValueLabel(p)}</p>
-                      <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
+                      <span className="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
                         {brandType(p.denominations, p.range)}
                       </span>
                     </div>

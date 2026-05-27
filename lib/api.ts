@@ -21,24 +21,72 @@ export function titleize(value: string): string {
     .join(' ')
 }
 
-// Manual overrides for brands where name→domain heuristic fails
+// More-specific overrides must come before less-specific ones (first match wins)
 const DOMAIN_OVERRIDES: Record<string, string> = {
-  'steam':             'steampowered.com',
+  // Apple family — specific first
+  'apple music':       'apple.com',
+  'app store':         'apple.com',
+  'itunes':            'apple.com',
+  'apple':             'apple.com',
+  // Google family
   'google play':       'play.google.com',
+  'youtube':           'youtube.com',
+  // Gaming
+  'steam':             'steampowered.com',
   'xbox':              'xbox.com',
   'playstation':       'playstation.com',
+  'nintendo':          'nintendo.com',
+  'roblox':            'roblox.com',
   'battle.net':        'battle.net',
   'battlenet':         'battle.net',
-  'at&t':              'att.com',
-  'twitch':            'twitch.tv',
-  'youtube':           'youtube.com',
+  'ea ':               'ea.com',
+  // Streaming / music
   'disney':            'disneyplus.com',
   'hbo':               'hbomax.com',
+  'twitch':            'twitch.tv',
+  'spotify':           'spotify.com',
+  'deezer':            'deezer.com',
+  'tidal':             'tidal.com',
+  'audible':           'audible.com',
+  // Shopping
+  'amazon':            'amazon.com',
+  'ebay':              'ebay.com',
+  'walmart':           'walmart.com',
+  'target':            'target.com',
+  'best buy':          'bestbuy.com',
   'foot locker':       'footlocker.com',
   "macy's":            'macys.com',
   'west elm':          'westelm.com',
+  'whole foods':       'wholefoodsmarket.com',
+  'wayfair':           'wayfair.com',
+  'etsy':              'etsy.com',
+  // Food & delivery
+  'doordash':          'doordash.com',
+  'grubhub':           'grubhub.com',
+  'ubereats':          'ubereats.com',
+  'uber eats':         'ubereats.com',
+  'seamless':          'seamless.com',
+  'instacart':         'instacart.com',
+  'chipotle':          'chipotle.com',
+  'domino':            'dominos.com',
+  'starbucks':         'starbucks.com',
+  'dunkin':            'dunkindonuts.com',
+  // Travel / ride
+  'airbnb':            'airbnb.com',
+  'uber':              'uber.com',
+  'lyft':              'lyft.com',
+  'expedia':           'expedia.com',
+  // Telecom
+  'at&t':              'att.com',
+  't-mobile':          't-mobile.com',
+  'verizon':           'verizon.com',
+  'mint mobile':       'mintmobile.com',
+  // Other
   'bloomin':           'bloominbrands.com',
   "ruth's chris":      'ruthschris.com',
+  'visa':              'visa.com',
+  'mastercard':        'mastercard.com',
+  'paypal':            'paypal.com',
 }
 
 function brandLogoUrl(name: string): string {
@@ -48,9 +96,11 @@ function brandLogoUrl(name: string): string {
     if (lower.includes(key)) return `https://logo.clearbit.com/${domain}`
   }
 
-  // Strip country / product-type suffixes and derive domain
+  // Strip gift-card noise words AND country/region suffixes before deriving domain
   const clean = name
-    .replace(/\b(usa|uk|us|ca|canada|global|worldwide|international|pin|prepaid|recharge|store)\b/gi, '')
+    .replace(/\be-?gift\s+card\b/gi, '')
+    .replace(/\bgift\s+card\b/gi, '')
+    .replace(/\b(egift|voucher|prepaid|recharge|reload|topup|top[\s-]up|card|gift|pin|store|usa|uk|us|ca|canada|global|worldwide|international)\b/gi, '')
     .replace(/[^a-zA-Z0-9\s]/g, '')
     .trim()
   const slug = clean.replace(/\s+/g, '').toLowerCase()

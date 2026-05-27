@@ -572,7 +572,13 @@ export default function Home() {
   }
 
   function handleToggleSave(p: Product) {
+    const wasSaved = savedCards.some((c) => c.id === p.id)
     setSavedCards(toggleSavedCard(p))
+    if (wasSaved) {
+      toast.error(`Removed from saved`, { duration: 2000 })
+    } else {
+      toast.success(`Saved ${p.name}`, { duration: 2000 })
+    }
   }
 
   function handleSubCategorySelect(label: string) {
