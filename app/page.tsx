@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useAccount } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import {
@@ -406,6 +407,7 @@ function OrdersView({ orderId }: { orderId: string | null }) {
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(orderId)
   const [progress, setProgress] = useState<OrderProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const notifiedStatus = useRef<string | null>(null)
 
   useEffect(() => {
     if (orderId) {
@@ -426,6 +428,21 @@ function OrdersView({ orderId }: { orderId: string | null }) {
         if (!active) return
         setProgress(p)
         setError(null)
+
+        // Browser notification on terminal status change
+        const status = p.status
+        if (
+          status !== notifiedStatus.current &&
+          (status === 'delivered' || status === 'failed' || status === 'refunded') &&
+          'Notification' in window &&
+          Notification.permission === 'granted' &&
+          localStorage.getItem('usdbt_notifs') !== 'false'
+        ) {
+          notifiedStatus.current = status
+          const title = status === 'delivered' ? '🎉 Card delivered!' : status === 'refunded' ? 'Order refunded' : 'Order failed'
+          const body  = status === 'delivered' ? 'Your gift card has been sent to your email.' : p.failureReason ?? 'Check your order for details.'
+          new Notification(title, { body, icon: '/logo.png' })
+        }
       } catch {
         if (!active) return
         setError('Could not load order progress.')
@@ -713,49 +730,88 @@ export default function Home() {
               ) : null}
             </main>
 
-            {/* Mobile backdrop for order panel */}
-            {showPanel && (
-              <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={reset} />
-            )}
+            {/* Order panel content (shared between desktop and mobile) */}
+            {(() => {
+              const panelContent = (
+                <>
+                  {step === 'configure' && product && (
+                    <OrderForm
+                      product={product}
+                      walletAddress={address!}
+                      prefilledEmail={savedEmail || undefined}
+                      onClose={reset}
+                      onOrder={(id, addr, mail) => {
+                        setOrderId(id)
+                        setPaymentAddress(addr)
+                        setEmail(mail)
+                        setStep('payment')
+                      }}
+                    />
+                  )}
+                  {step === 'payment' && orderId && (
+                    <PaymentScreen
+                      orderId={orderId}
+                      paymentAddress={paymentAddress}
+                      email={email}
+                      onSuccess={() => setStep('success')}
+                    />
+                  )}
+                  {step === 'success' && (
+                    <SuccessScreen orderId={orderId!} email={email} onReset={reset} />
+                  )}
+                </>
+              )
 
-            {/* Right panel — order flow */}
-            {showPanel && (
-              <aside className={[
-                'flex-shrink-0 overflow-hidden flex flex-col bg-white',
-                /* mobile: bottom sheet */
-                'fixed inset-x-0 bottom-0 z-50 rounded-t-2xl shadow-2xl max-h-[92vh]',
-                /* desktop: right panel */
-                'md:relative md:inset-auto md:z-auto md:rounded-none md:max-h-none md:shadow-none md:border-l md:border-gray-100 md:w-[400px]',
-              ].join(' ')}>
-                {/* Drag handle (mobile only) */}
-                <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3 md:hidden flex-shrink-0" />
-                {step === 'configure' && product && (
-                  <OrderForm
-                    product={product}
-                    walletAddress={address!}
-                    prefilledEmail={savedEmail || undefined}
-                    onClose={reset}
-                    onOrder={(id, addr, mail) => {
-                      setOrderId(id)
-                      setPaymentAddress(addr)
-                      setEmail(mail)
-                      setStep('payment')
-                    }}
-                  />
-                )}
-                {step === 'payment' && orderId && (
-                  <PaymentScreen
-                    orderId={orderId}
-                    paymentAddress={paymentAddress}
-                    email={email}
-                    onSuccess={() => setStep('success')}
-                  />
-                )}
-                {step === 'success' && (
-                  <SuccessScreen orderId={orderId!} email={email} onReset={reset} />
-                )}
-              </aside>
-            )}
+              return (
+                <>
+                  {/* Desktop: wipe in from right as flex child */}
+                  <AnimatePresence>
+                    {showPanel && (
+                      <motion.aside
+                        key="order-panel-desktop"
+                        className="hidden md:flex flex-col bg-white overflow-hidden flex-shrink-0 border-l border-gray-100"
+                        initial={{ width: 0 }}
+                        animate={{ width: 400 }}
+                        exit={{ width: 0 }}
+                        transition={{ type: 'spring', damping: 32, stiffness: 280 }}
+                      >
+                        <div className="w-[400px] h-full flex flex-col overflow-hidden">
+                          {panelContent}
+                        </div>
+                      </motion.aside>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Mobile: slide up from bottom */}
+                  <AnimatePresence>
+                    {showPanel && (
+                      <>
+                        <motion.div
+                          key="order-backdrop-mobile"
+                          className="md:hidden fixed inset-0 z-40 bg-black/30"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          onClick={reset}
+                        />
+                        <motion.aside
+                          key="order-panel-mobile"
+                          className="md:hidden fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden"
+                          initial={{ y: '100%' }}
+                          animate={{ y: 0 }}
+                          exit={{ y: '100%' }}
+                          transition={{ type: 'spring', damping: 32, stiffness: 300 }}
+                        >
+                          <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mt-3 flex-shrink-0" />
+                          {panelContent}
+                        </motion.aside>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </>
+              )
+            })()}
           </div>
         </div>
       </div>

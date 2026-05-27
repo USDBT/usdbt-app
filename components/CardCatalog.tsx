@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Loader2, MoreHorizontal, LayoutGrid, List, CreditCard, Bookmark } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { fetchProducts, priceLabel, titleize, type Product } from '@/lib/api'
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
@@ -162,8 +163,9 @@ export function CardCatalog({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400 text-sm gap-2">
-        <Loader2 size={16} className="animate-spin" /> Loading gift cards…
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <Loader2 size={40} className="animate-spin" style={{ color: '#2b2bf5' }} />
+        <p className="text-sm text-gray-400">Loading gift cards…</p>
       </div>
     )
   }
@@ -341,7 +343,11 @@ export function CardCatalog({
                       <Bookmark size={15} className={isSaved ? 'fill-[#2b2bf5] text-[#2b2bf5]' : 'text-gray-400'} />
                     </button>
                   )}
-                  <button onClick={() => onSelect(p)} className="flex flex-col flex-1 text-left w-full">
+                  <motion.button
+                    onClick={() => onSelect(p)}
+                    whileTap={{ scale: 0.96 }}
+                    className="flex flex-col flex-1 text-left w-full"
+                  >
                     <ProductThumb product={p} className="w-10 h-10 rounded-xl mb-3 overflow-hidden flex-shrink-0" />
                     <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{p.name}</p>
                     <p className="text-xs text-gray-400 mt-1">{categoryLabel(p)}</p>
@@ -351,7 +357,7 @@ export function CardCatalog({
                         {brandType(p.denominations, p.range)}
                       </span>
                     </div>
-                  </button>
+                  </motion.button>
                 </div>
               )
             })}

@@ -6,6 +6,7 @@ import {
   DollarSign, CreditCard, Mail,
   Tag, FolderOpen, Globe, Zap, ShieldCheck,
 } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { createOrder, getWalletBalances, priceLabel, titleize, type Product } from '@/lib/api'
 
 function SectionLabel({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
@@ -39,6 +40,7 @@ export function OrderForm({
   const [balancesLoading, setBalancesLoading] = useState(false)
   const [usdcBalance, setUsdcBalance] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showUsdbtModal, setShowUsdbtModal] = useState(false)
 
   const currency = 'USDC'
   const feeRate = 0.04
@@ -117,7 +119,7 @@ export function OrderForm({
   ]
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {/* Header */}
       <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-start justify-between mb-4">
@@ -231,12 +233,32 @@ export function OrderForm({
             {/* Pay with */}
             <div>
               <SectionLabel icon={CreditCard} text="Pay with" />
-              <button className="flex items-center gap-2.5 border-2 border-[--color-brand] rounded-xl px-4 py-2.5 bg-[--color-brand-light] w-full">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/usdc_logo.png" alt="USDC" className="w-5 h-5 rounded-full object-contain flex-shrink-0" />
-                <span className="text-sm font-semibold text-[--color-brand]">USDC</span>
-                <Check size={14} className="text-[--color-brand] ml-auto" />
-              </button>
+              <div className="space-y-2">
+                <button className="flex items-center gap-2.5 border-2 border-[--color-brand] rounded-xl px-4 py-2.5 bg-[--color-brand-light] w-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/usdc_logo.png" alt="USDC" className="w-5 h-5 rounded-full object-contain flex-shrink-0" />
+                  <span className="text-sm font-semibold text-[--color-brand]">USDC</span>
+                  <Check size={14} className="text-[--color-brand] ml-auto" />
+                </button>
+                {/* USDBT — coming soon */}
+                <button
+                  type="button"
+                  onClick={() => setShowUsdbtModal(true)}
+                  className="relative w-full"
+                >
+                  <div className="flex items-center gap-2.5 border-2 border-gray-200 rounded-xl px-4 py-2.5 bg-gray-50 w-full blur-[2px] select-none">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#2b2bf5' }}>
+                      <span className="text-white text-[9px] font-bold">$</span>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-600">$USDBT</span>
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-[10px] font-semibold text-gray-500 bg-white/90 px-2.5 py-1 rounded-full border border-gray-200 shadow-sm">
+                      Coming soon
+                    </span>
+                  </div>
+                </button>
+              </div>
             </div>
 
             <div className="border-t border-gray-100" />
@@ -322,6 +344,51 @@ export function OrderForm({
           </button>
         </div>
       )}
+
+      {/* USDBT info modal */}
+      <AnimatePresence>
+        {showUsdbtModal && (
+          <>
+            <motion.div
+              className="absolute inset-0 z-20 bg-black/30 rounded-[inherit]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={() => setShowUsdbtModal(false)}
+            />
+            <motion.div
+              className="absolute inset-x-4 z-30 bg-white rounded-2xl shadow-xl p-6"
+              style={{ top: '50%', translateY: '-50%' }}
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#eef0ff' }}>
+                  <span className="text-lg font-bold" style={{ color: '#2b2bf5' }}>$</span>
+                </div>
+                <button onClick={() => setShowUsdbtModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+                  <X size={15} />
+                </button>
+              </div>
+              <h3 className="text-base font-semibold text-gray-900 mb-2">Pay with $USDBT</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">
+                Soon you'll be able to make purchases directly with <span className="font-semibold text-gray-700">$USDBT</span> on Base — no swaps, no extra steps.
+              </p>
+              <p className="text-xs text-gray-400 mt-3">Hold $USDBT to unlock this feature when it launches.</p>
+              <button
+                onClick={() => setShowUsdbtModal(false)}
+                className="mt-5 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
+                style={{ backgroundColor: '#2b2bf5' }}
+              >
+                Got it
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
