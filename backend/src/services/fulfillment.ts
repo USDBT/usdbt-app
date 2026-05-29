@@ -1,72 +1,63 @@
-import { databases, requiredEnv } from '../lib/appwrite'
-import { createInvoice, payInvoice, getInvoice } from '../lib/bitrefill'
+import { sql } from '../lib/db'
+import { createInvoice, payInvoice } from '../lib/bitrefill'
 import { resend } from '../lib/email'
 import { ORDER_STATUS } from '../lib/order-status'
 
-const DB = requiredEnv('APPWRITE_DATABASE_ID')
-const COL = requiredEnv('APPWRITE_ORDERS_COLLECTION_ID')
 const FROM = process.env.EMAIL_FROM ?? 'cards@usdbt.us'
 
 export async function fulfillOrder(orderId: string): Promise<void> {
-  await databases.updateDocument(DB, COL, orderId, {
-    status: ORDER_STATUS.HOT_WALLET_FUNDED,
-  })
+  await sql`UPDATE orders SET status = ${ORDER_STATUS.HOT_WALLET_FUNDED} WHERE id = ${orderId}`
 
   let invoice
   try {
-    await databases.updateDocument(DB, COL, orderId, {
-      status: ORDER_STATUS.BITREFILL_PROCESSING,
-    })
+    await sql`UPDATE orders SET status = ${ORDER_STATUS.BITREFILL_PROCESSING} WHERE id = ${orderId}`
 
-    invoice = await createInvoice(
-      await getOrderField(orderId, 'brandId'),
-      await getOrderField(orderId, 'faceValue'),
-      1,
-    )
-    await databases.updateDocument(DB, COL, orderId, {
-      reloadlyOrderId: invoice.id,
-    })
+    const [order] = await sql`
+      SELECT brand_id, face_value, email, brand_name FROM orders WHERE id = ${orderId}
+    `
+
+    invoice = await createInvoice(order.brand_id, order.face_value, 1)
+    await sql`UPDATE orders SET reloadly_order_id = ${invoice.id} WHERE id = ${orderId}`
 
     const paid = await payInvoice(invoice.id)
-    const order = paid.orders?.[0]
-    const codes = order?.codes ?? []
+    const fulfilledOrder = paid.orders?.[0]
+    const codes = fulfilledOrder?.codes ?? []
     const code = codes[0]?.code ?? ''
     const pin = codes[0]?.pin ?? ''
 
-    await databases.updateDocument(DB, COL, orderId, {
-      status: ORDER_STATUS.DELIVERED,
-      reloadlyOrderId: order?.id ?? invoice.id,
-    })
-
-    const email = await getOrderField(orderId, 'email')
-    const brandName = await getOrderField(orderId, 'brandName')
-    const faceValue = await getOrderField(orderId, 'faceValue')
+    await sql`
+      UPDATE orders SET status = ${ORDER_STATUS.DELIVERED}, reloadly_order_id = ${fulfilledOrder?.id ?? invoice.id}
+      WHERE id = ${orderId}
+    `
 
     await resend.emails.send({
       from: FROM,
-      to: email,
-      subject: `Your ${brandName} gift card — $${faceValue}`,
-      html: buildEmailHtml({ brandName, faceValue, code, pin, redemptionInfo: order?.redemptionInfo }),
+      to: order.email,
+      subject: `Your ${order.brand_name} gift card — $${order.face_value}`,
+      html: buildEmailHtml({
+        brandName: order.brand_name,
+        faceValue: order.face_value,
+        code,
+        pin,
+        redemptionInfo: fulfilledOrder?.redemptionInfo,
+      }),
     })
   } catch (err) {
-    const doc = await databases.getDocument(DB, COL, orderId) as any
-    const wasUserDebited = [
+    const [order] = await sql`SELECT status FROM orders WHERE id = ${orderId}`
+    const wasUserDebited = order && [
       ORDER_STATUS.USER_DEBITED,
       ORDER_STATUS.HOT_WALLET_FUNDED,
       ORDER_STATUS.BITREFILL_PROCESSING,
-    ].includes(doc.status)
+    ].includes(order.status)
 
-    await databases.updateDocument(DB, COL, orderId, {
-      status: wasUserDebited ? ORDER_STATUS.REFUNDED : ORDER_STATUS.FAILED,
-      failureReason: String(err),
-    })
+    await sql`
+      UPDATE orders
+      SET status = ${wasUserDebited ? ORDER_STATUS.REFUNDED : ORDER_STATUS.FAILED},
+          failure_reason = ${String(err)}
+      WHERE id = ${orderId}
+    `
     throw err
   }
-}
-
-async function getOrderField(orderId: string, field: string): Promise<any> {
-  const doc = await databases.getDocument(DB, COL, orderId)
-  return (doc as any)[field]
 }
 
 function buildEmailHtml(opts: {

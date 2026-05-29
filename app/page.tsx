@@ -501,8 +501,9 @@ function OrdersView({ orderId }: { orderId: string | null }) {
 }
 
 export default function Home() {
-  const { isConnected, address } = useAccount()
+  const { isConnected, address, status } = useAccount()
   const { authenticate } = useAuth()
+  const prevAddress = useRef<string | undefined>(undefined)
   const [splashDone, setSplashDone] = useState(false)
   const [view, setView] = useState<View>('shop')
   const [activeTab, setActiveTab] = useState<Tab>('cards')
@@ -526,46 +527,48 @@ export default function Home() {
     fetchProducts().then(setAllProducts).catch(() => {})
   }, [])
 
-  // After wallet connect: authenticate (SIWE → JWT), then check user registration
+  // After wallet connect: authenticate (SIWE → JWT), then check user registration.
+  // Delayed by one tick so the wallet completes its own connection handshake first.
   useEffect(() => {
     if (!isConnected || !address) {
-      clearToken()
+      if (prevAddress.current) clearToken(prevAddress.current)
+      prevAddress.current = undefined
+      setSavedEmail('')
       return
     }
-
-    // If we have a stored email, no need to re-check DB
-    const localEmail = getStoredEmail()
-    if (localEmail) {
-      setSavedEmail(localEmail)
-      // Still authenticate in background if no valid token
-      if (!getValidToken()) {
-        authenticate(address).catch(() => {})
-      }
-      return
-    }
+    prevAddress.current = address
 
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
 
-    authenticate(address)
-      .then(token => {
-        if (!token) return  // user rejected signing — still let them browse
-        return fetch(`${backendUrl}/users/${address}`, {
+    const t = setTimeout(async () => {
+      // If we already have a cached email for this wallet, restore it and refresh token quietly
+      const localEmail = getStoredEmail(address)
+      if (localEmail) {
+        setSavedEmail(localEmail)
+        if (!getValidToken(address)) authenticate(address).catch(() => {})
+        return
+      }
+
+      // New wallet — sign to get JWT, then check registration
+      const token = await authenticate(address)
+      if (!token) return  // user rejected signing — still let them browse
+
+      try {
+        const r = await fetch(`${backendUrl}/users/${address}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
-      })
-      .then(r => {
-        if (!r) return
         if (r.status === 404) {
           setShowEmailModal(true)
         } else if (r.ok) {
-          r.json().then((u: any) => {
-            const email = u.email ?? ''
-            setSavedEmail(email)
-            storeEmail(email)
-          })
+          const u = await r.json()
+          const email = u.email ?? ''
+          setSavedEmail(email)
+          storeEmail(email, address)
         }
-      })
-      .catch(() => {})
+      } catch {}
+    }, 500)
+
+    return () => clearTimeout(t)
   }, [isConnected, address])
 
   // Cmd+K shortcut
@@ -670,7 +673,11 @@ export default function Home() {
           <div className="flex flex-1 overflow-hidden">
             {/* Main content */}
             <main className="flex-1 overflow-y-auto min-w-0">
-              {!isConnected ? (
+              {status === 'reconnecting' ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="w-6 h-6 rounded-full border-2 border-[#2b2bf5] border-t-transparent animate-spin" />
+                </div>
+              ) : !isConnected ? (
                 <div className="flex flex-col items-center justify-center h-full px-6 text-center">
                   <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ backgroundColor: '#eef0ff' }}>
                     <Store size={26} style={{ color: '#2b2bf5' }} />

@@ -1,13 +1,9 @@
 import { createHash } from 'crypto'
 import { Router } from 'express'
-import { databases, requiredEnv } from '../lib/appwrite'
+import { sql } from '../lib/db'
 import { ORDER_STATUS } from '../lib/order-status'
 
 export const webhooksRouter = Router()
-
-const DB = requiredEnv('APPWRITE_DATABASE_ID')
-const COL = requiredEnv('APPWRITE_ORDERS_COLLECTION_ID')
-const WEBHOOK_EVENTS_COL = process.env.APPWRITE_WEBHOOK_EVENTS_COLLECTION_ID ?? 'webhook_events'
 
 function eventIdFromBody(body: any): string {
   const raw = body?.eventId ?? body?.event_id ?? body?.id
@@ -15,25 +11,20 @@ function eventIdFromBody(body: any): string {
   return createHash('sha256').update(JSON.stringify(body ?? {})).digest('hex')
 }
 
-function eventDocId(eventId: string): string {
-  return createHash('md5').update(eventId).digest('hex')
-}
-
 webhooksRouter.post('/bitrefill', async (req, res) => {
   try {
     const body = req.body ?? {}
     const eventId = eventIdFromBody(body)
-    const markerId = eventDocId(eventId)
+    const markerId = createHash('md5').update(eventId).digest('hex')
 
     try {
-      await databases.createDocument(DB, WEBHOOK_EVENTS_COL, markerId, {
-        source: 'bitrefill',
-        eventKey: eventId,
-        state: 'received',
-      })
+      await sql`
+        INSERT INTO webhook_events (id, source, event_key)
+        VALUES (${markerId}, 'bitrefill', ${eventId})
+      `
     } catch (err) {
       const msg = String(err)
-      if (msg.toLowerCase().includes('already exists')) {
+      if (msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('unique')) {
         return res.status(200).json({ ok: true, deduped: true })
       }
       throw err
@@ -44,43 +35,43 @@ webhooksRouter.post('/bitrefill', async (req, res) => {
     const providerStatus = String(body?.status ?? '').toLowerCase()
 
     if (!invoiceId && !providerOrderId) {
-      await databases.updateDocument(DB, WEBHOOK_EVENTS_COL, markerId, {
-        state: 'invalid',
-      })
+      await sql`UPDATE webhook_events SET state = 'invalid' WHERE id = ${markerId}`
       return res.status(400).json({ error: 'missing invoice/order reference' })
     }
 
-    const result = await databases.listDocuments(DB, COL)
-    const docs = (result.documents ?? []) as any[]
-    const order = docs.find((d) =>
-      (invoiceId && String(d.reloadlyOrderId ?? '') === invoiceId) ||
-      (providerOrderId && String(d.reloadlyOrderId ?? '') === providerOrderId)
-    )
+    const [order] = await sql`
+      SELECT id FROM orders
+      WHERE reloadly_order_id = ANY(ARRAY[${invoiceId}, ${providerOrderId}]::text[])
+      LIMIT 1
+    `
 
     if (!order) {
-      await databases.updateDocument(DB, WEBHOOK_EVENTS_COL, markerId, {
-        invoiceId: invoiceId || undefined,
-        providerOrderId: providerOrderId || undefined,
-        providerStatus: providerStatus || undefined,
-        state: 'ignored',
-      })
+      await sql`
+        UPDATE webhook_events
+        SET invoice_id = ${invoiceId || null}, provider_order_id = ${providerOrderId || null},
+            provider_status = ${providerStatus || null}, state = 'ignored'
+        WHERE id = ${markerId}
+      `
       return res.status(202).json({ ok: true, ignored: 'order not found' })
     }
 
     if (['delivered', 'complete', 'completed', 'fulfilled'].includes(providerStatus)) {
-      await databases.updateDocument(DB, COL, order.$id, { status: ORDER_STATUS.DELIVERED })
+      await sql`UPDATE orders SET status = ${ORDER_STATUS.DELIVERED} WHERE id = ${order.id}`
     } else if (['failed', 'expired', 'cancelled', 'canceled'].includes(providerStatus)) {
-      await databases.updateDocument(DB, COL, order.$id, {
-        status: ORDER_STATUS.REFUNDED,
-        failureReason: `bitrefill webhook status=${providerStatus}`,
-      })
+      await sql`
+        UPDATE orders
+        SET status = ${ORDER_STATUS.REFUNDED},
+            failure_reason = ${'bitrefill webhook status=' + providerStatus}
+        WHERE id = ${order.id}
+      `
     }
-    await databases.updateDocument(DB, WEBHOOK_EVENTS_COL, markerId, {
-      invoiceId: invoiceId || undefined,
-      providerOrderId: providerOrderId || undefined,
-      providerStatus: providerStatus || undefined,
-      state: 'processed',
-    })
+
+    await sql`
+      UPDATE webhook_events
+      SET invoice_id = ${invoiceId || null}, provider_order_id = ${providerOrderId || null},
+          provider_status = ${providerStatus || null}, state = 'processed'
+      WHERE id = ${markerId}
+    `
     return res.status(200).json({ ok: true })
   } catch (err) {
     console.error('[webhooks] bitrefill error:', err)

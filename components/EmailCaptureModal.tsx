@@ -22,11 +22,11 @@ export function EmailCaptureModal({ walletAddress, onSaved, onDismiss }: Props) 
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/users`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        headers: { 'Content-Type': 'application/json', ...authHeaders(walletAddress) },
         body: JSON.stringify({ walletAddress, email: email.trim() }),
       })
       if (!res.ok) throw new Error('Failed to save')
-      storeEmail(email.trim())
+      storeEmail(email.trim(), walletAddress)
       toast.success('Email saved — your cards will be delivered here')
       onSaved(email.trim())
     } catch {

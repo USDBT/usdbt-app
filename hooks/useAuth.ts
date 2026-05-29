@@ -13,8 +13,7 @@ export function useAuth() {
   const { signMessageAsync } = useSignMessage()
 
   const authenticate = useCallback(async (address: string): Promise<string | null> => {
-    // Return existing token if still valid
-    const existing = getValidToken()
+    const existing = getValidToken(address)
     if (existing) {
       setState('verified')
       return existing
@@ -35,11 +34,10 @@ export function useAuth() {
 
       const signature = await signMessageAsync({ message })
       const token = await verifySignature(address, signature, message)
-      storeToken(token)
+      storeToken(token, address)
       setState('verified')
       return token
-    } catch (err: any) {
-      // User rejected signing
+    } catch {
       setState('error')
       return null
     }

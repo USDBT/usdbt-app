@@ -1,19 +1,21 @@
 'use client'
 
 import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit'
-import { WagmiProvider } from 'wagmi'
+import { WagmiProvider, cookieToInitialState } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from 'next-themes'
 import { Toaster } from 'sonner'
 import { wagmiConfig } from '@/lib/wagmi'
 import '@rainbow-me/rainbowkit/styles.css'
+import { useState } from 'react'
 
-const queryClient = new QueryClient()
+export function Providers({ children, cookie }: { children: React.ReactNode; cookie?: string | null }) {
+  const [queryClient] = useState(() => new QueryClient())
+  const initialState = cookieToInitialState(wagmiConfig, cookie)
 
-export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
-      <WagmiProvider config={wagmiConfig}>
+      <WagmiProvider config={wagmiConfig} initialState={initialState}>
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider
             theme={lightTheme({

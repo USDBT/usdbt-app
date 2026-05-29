@@ -8,17 +8,14 @@ import { balancesRouter } from './routes/balances'
 import { authRouter } from './routes/auth'
 import { webhooksRouter } from './routes/webhooks'
 import { startPoller } from './services/poller'
+import { sql, runMigrations } from './lib/db'
 
 const app = express()
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
 
 function logConfigPresence(): void {
   const requiredNonSecretVars = [
-    'APPWRITE_ENDPOINT',
-    'APPWRITE_PROJECT_ID',
-    'APPWRITE_DATABASE_ID',
-    'APPWRITE_ORDERS_COLLECTION_ID',
-    'APPWRITE_USERS_COLLECTION_ID',
+    'DATABASE_URL',
     'PAYMENT_WALLET_ADDRESS',
   ] as const
 
@@ -66,11 +63,11 @@ app.listen(PORT, async () => {
   logConfigPresence()
 
   try {
-    const res = await fetch(`${process.env.APPWRITE_ENDPOINT}/health`)
-    if (res.ok) console.log('[usdtb-backend] appwrite connection ok')
-    else console.warn('[usdtb-backend] appwrite health check returned', res.status)
+    await runMigrations()
+    console.log('[usdtb-backend] database ready')
   } catch (err) {
-    console.error('[usdtb-backend] appwrite health check failed:', err)
+    console.error('[usdtb-backend] migration failed:', err)
+    process.exit(1)
   }
 
   startPoller()

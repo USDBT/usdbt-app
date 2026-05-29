@@ -1,53 +1,53 @@
-const TOKEN_KEY = 'usdbt_jwt'
-const EMAIL_KEY = 'usdbt_email'
-
 function backendUrl() {
   return process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
 }
 
-export function getStoredToken(): string | null {
+function tokenKey(address: string) { return `usdbt_jwt_${address.toLowerCase()}` }
+function emailKey(address: string) { return `usdbt_email_${address.toLowerCase()}` }
+
+export function getStoredToken(address: string): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem(TOKEN_KEY)
+  return localStorage.getItem(tokenKey(address))
 }
 
-export function storeToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token)
+export function storeToken(token: string, address: string) {
+  localStorage.setItem(tokenKey(address), token)
 }
 
-export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY)
+export function clearToken(address: string) {
+  localStorage.removeItem(tokenKey(address))
 }
 
-export function getStoredEmail(): string | null {
+export function getStoredEmail(address: string): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem(EMAIL_KEY)
+  return localStorage.getItem(emailKey(address))
 }
 
-export function storeEmail(email: string) {
-  localStorage.setItem(EMAIL_KEY, email)
+export function storeEmail(email: string, address: string) {
+  localStorage.setItem(emailKey(address), email)
 }
 
 function isExpired(token: string): boolean {
   try {
     const [, payload] = token.split('.')
     const { exp } = JSON.parse(atob(payload))
-    return Date.now() / 1000 > exp - 60  // 60s buffer
+    return Date.now() / 1000 > exp - 60
   } catch {
     return true
   }
 }
 
-export function getValidToken(): string | null {
-  const t = getStoredToken()
+export function getValidToken(address: string): string | null {
+  const t = getStoredToken(address)
   if (!t || isExpired(t)) {
-    if (t) clearToken()
+    if (t) clearToken(address)
     return null
   }
   return t
 }
 
-export function authHeaders(): Record<string, string> {
-  const t = getValidToken()
+export function authHeaders(address: string): Record<string, string> {
+  const t = getValidToken(address)
   return t ? { Authorization: `Bearer ${t}` } : {}
 }
 

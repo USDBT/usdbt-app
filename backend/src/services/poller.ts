@@ -1,11 +1,8 @@
-import { databases, requiredEnv } from '../lib/appwrite'
+import { sql, requiredEnv } from '../lib/db'
 import { findIncomingTransfer, currentBlock } from '../lib/chain'
 import { fulfillOrder } from './fulfillment'
 import { ORDER_STATUS } from '../lib/order-status'
 import type { Address } from 'viem'
-
-const DB = requiredEnv('APPWRITE_DATABASE_ID')
-const COL = requiredEnv('APPWRITE_ORDERS_COLLECTION_ID')
 
 const USDC_ADDRESS = (process.env.USDC_TOKEN_ADDRESS ?? '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913') as Address
 const PAYMENT_WALLET = requiredEnv('PAYMENT_WALLET_ADDRESS') as Address
@@ -18,33 +15,27 @@ export function startPoller(intervalMs = 15_000): void {
 }
 
 async function checkPendingOrders(): Promise<void> {
-  let docs: any[]
-  try {
-    // Fetch all docs with no query filter — Appwrite query syntax varies
-    // by version/instance. Filter entirely in memory instead.
-    const result = await databases.listDocuments(DB, COL)
-    docs = result.documents ?? []
-  } catch (err) {
-    console.error('[poller] failed to fetch orders:', err)
-    return
-  }
-
   const now = new Date()
-  const pending = docs.filter((d: any) => d.status === ORDER_STATUS.PENDING_PAYMENT)
+
+  const pending = await sql`
+    SELECT id, wallet_address, payment_amount, expires_at
+    FROM orders
+    WHERE status = ${ORDER_STATUS.PENDING_PAYMENT}
+  `
   if (pending.length === 0) return
 
-  const active  = pending.filter((d: any) => new Date(d.expiresAt) > now)
-  const expired = pending.filter((d: any) => new Date(d.expiresAt) <= now)
+  const active = pending.filter((d) => new Date(d.expires_at) > now)
+  const expired = pending.filter((d) => new Date(d.expires_at) <= now)
 
-  for (const doc of expired) {
+  for (const order of expired) {
     try {
-      await databases.updateDocument(DB, COL, doc.$id, {
-        status: ORDER_STATUS.FAILED,
-        failureReason: 'payment window expired',
-      })
-      console.log(`[poller] expired order ${doc.$id}`)
+      await sql`
+        UPDATE orders SET status = ${ORDER_STATUS.FAILED}, failure_reason = 'payment window expired'
+        WHERE id = ${order.id}
+      `
+      console.log(`[poller] expired order ${order.id}`)
     } catch (err) {
-      console.error(`[poller] failed to expire order ${doc.$id}:`, err)
+      console.error(`[poller] failed to expire order ${order.id}:`, err)
     }
   }
 
@@ -64,7 +55,7 @@ async function checkPendingOrders(): Promise<void> {
     try {
       await checkOrder(order, fromBlock)
     } catch (err) {
-      console.error(`[poller] error checking order ${order.$id}:`, err)
+      console.error(`[poller] error checking order ${order.id}:`, err)
     }
   }
 }
@@ -72,20 +63,20 @@ async function checkPendingOrders(): Promise<void> {
 async function checkOrder(order: any, fromBlock: bigint): Promise<void> {
   const match = await findIncomingTransfer({
     tokenAddress: USDC_ADDRESS,
-    from: order.walletAddress as Address,
+    from: order.wallet_address as Address,
     to: PAYMENT_WALLET,
-    expectedAmountHuman: order.paymentAmount,
+    expectedAmountHuman: order.payment_amount,
     decimals: USDC_DECIMALS,
     fromBlock,
   })
 
   if (!match) return
 
-  console.log(`[poller] payment detected for order ${order.$id} — tx ${match.txHash}`)
+  console.log(`[poller] payment detected for order ${order.id} — tx ${match.txHash}`)
 
-  await databases.updateDocument(DB, COL, order.$id, {
-    txHash: match.txHash,
-    status: ORDER_STATUS.USER_DEBITED,
-  })
-  await fulfillOrder(order.$id)
+  await sql`
+    UPDATE orders SET tx_hash = ${match.txHash}, status = ${ORDER_STATUS.USER_DEBITED}
+    WHERE id = ${order.id}
+  `
+  await fulfillOrder(order.id)
 }
