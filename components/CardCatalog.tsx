@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, MoreHorizontal, LayoutGrid, List, CreditCard, Bookmark } from 'lucide-react'
+import { Loader2, MoreHorizontal, LayoutGrid, List, Bookmark } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { fetchProducts, priceLabel, titleize, type Product } from '@/lib/api'
 
@@ -44,25 +44,52 @@ function maxValueLabel(p: Product): string {
   return 'Max —'
 }
 
+const BRAND_COLORS = [
+  '#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444',
+  '#8b5cf6','#06b6d4','#84cc16','#f97316','#ec4899',
+]
+
+function brandColor(name: string): string {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return BRAND_COLORS[h % BRAND_COLORS.length]
+}
+
+function brandInitials(name: string): string {
+  const words = name.replace(/gift\s*card|egift|voucher|prepaid/gi, '').trim().split(/\s+/)
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+}
+
+function buildImageSrcs(product: Product): string[] {
+  const { image } = product
+  if (!image) return []
+
+  // Extract domain — works whether image is a clearbit URL or a plain domain string
+  let domain = ''
+  if (image.startsWith('https://logo.clearbit.com/')) {
+    domain = image.slice('https://logo.clearbit.com/'.length)
+  } else if (/^https?:\/\//i.test(image)) {
+    return [image]  // direct URL — use as-is, no further derivation
+  }
+
+  if (!domain) return []
+
+  return [
+    `https://logo.clearbit.com/${domain}`,
+    `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+  ]
+}
+
 function ProductThumb({ product, className }: { product: Product; className?: string }) {
   const [attempt, setAttempt] = useState(0)
-
-  const srcs = (() => {
-    if (!product.image) return []
-    const domain = product.image.replace('https://logo.clearbit.com/', '')
-    const isDomain = !domain.startsWith('http') && domain.includes('.')
-    return [
-      product.image,
-      isDomain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=128` : '',
-    ].filter(Boolean) as string[]
-  })()
-
+  const srcs = buildImageSrcs(product)
   const src = srcs[attempt]
-  const exhausted = attempt >= srcs.length
 
   return (
     <div className={className}>
-      {src && !exhausted ? (
+      {src && attempt < srcs.length ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
@@ -71,8 +98,11 @@ function ProductThumb({ product, className }: { product: Product; className?: st
           onError={() => setAttempt((a) => a + 1)}
         />
       ) : (
-        <div className="w-full h-full rounded-[inherit] bg-gradient-to-br from-slate-100 via-slate-200 to-blue-100 border border-slate-200 flex items-center justify-center">
-          <CreditCard size={18} className="text-slate-500" />
+        <div
+          className="w-full h-full flex items-center justify-center rounded-[inherit] text-white font-bold text-sm select-none"
+          style={{ backgroundColor: brandColor(product.name) }}
+        >
+          {brandInitials(product.name)}
         </div>
       )}
     </div>
