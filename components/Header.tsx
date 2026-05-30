@@ -1,8 +1,9 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { Search, Bell, CreditCard, Activity, DollarSign, LifeBuoy, Menu, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Search, Bell, BellRing, CreditCard, Activity, DollarSign, LifeBuoy, Menu, X } from 'lucide-react'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { toast } from 'sonner'
 
 export type Tab = 'cards' | 'activity' | 'spend' | 'support'
 
@@ -30,6 +31,25 @@ export function Header({
 }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
+  const [perm, setPerm] = useState<NotificationPermission | 'unsupported'>('default')
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) { setPerm('unsupported'); return }
+    setPerm(Notification.permission)
+  }, [notifOpen])
+
+  async function enableNotifications() {
+    if (!('Notification' in window)) { toast.error('Notifications not supported in this browser'); return }
+    const result = await Notification.requestPermission()
+    setPerm(result)
+    if (result === 'granted') {
+      localStorage.setItem('usdbt_notifs', 'true')
+      toast.success('Notifications enabled — we’ll ping you on order updates')
+      new Notification('USDBT notifications on', { body: "You'll get order status updates here.", icon: '/logo.png' })
+    } else {
+      toast.error('Notifications blocked. Enable them in your browser settings.')
+    }
+  }
 
   return (
     <header className="h-[60px] flex items-center px-4 bg-white border-b border-gray-100 gap-3 flex-shrink-0 relative">
@@ -106,11 +126,38 @@ export function Header({
                     <X size={13} />
                   </button>
                 </div>
-                <div className="py-12 flex flex-col items-center gap-2">
-                  <Bell size={24} className="text-gray-200" />
-                  <p className="text-sm text-gray-400">No notifications yet</p>
-                  <p className="text-xs text-gray-300">Order updates will appear here</p>
-                </div>
+                {perm === 'granted' ? (
+                  <div className="py-12 flex flex-col items-center gap-2">
+                    <BellRing size={24} className="text-[#2b2bf5]" />
+                    <p className="text-sm text-gray-500">Notifications are on</p>
+                    <p className="text-xs text-gray-300">Order updates will pop up here & on your device</p>
+                  </div>
+                ) : perm === 'unsupported' ? (
+                  <div className="py-12 flex flex-col items-center gap-2 px-6 text-center">
+                    <Bell size={24} className="text-gray-200" />
+                    <p className="text-sm text-gray-400">Not supported</p>
+                    <p className="text-xs text-gray-300">This browser doesn’t support notifications</p>
+                  </div>
+                ) : (
+                  <div className="py-8 flex flex-col items-center gap-3 px-5 text-center">
+                    <Bell size={24} className="text-gray-300" />
+                    <p className="text-sm text-gray-500">Get notified on order updates</p>
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      {perm === 'denied'
+                        ? 'Notifications are blocked. Re-enable them in your browser’s site settings.'
+                        : 'Allow browser notifications so we can ping you when your card is delivered.'}
+                    </p>
+                    {perm !== 'denied' && (
+                      <button
+                        onClick={enableNotifications}
+                        className="mt-1 px-4 py-2 rounded-xl text-white text-xs font-semibold transition-colors"
+                        style={{ backgroundColor: '#2b2bf5' }}
+                      >
+                        Enable notifications
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}

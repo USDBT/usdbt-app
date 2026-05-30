@@ -20,10 +20,10 @@ import { CommandSearch } from '@/components/CommandSearch'
 import { SettingsDrawer } from '@/components/SettingsDrawer'
 import { HelpDrawer } from '@/components/HelpDrawer'
 import { EmailCaptureModal } from '@/components/EmailCaptureModal'
-import { fetchProducts, getOrderProgress, type Product, type OrderProgress } from '@/lib/api'
+import { fetchProducts, getOrderProgress, getOrderStats, type Product, type OrderProgress, type OrderStats } from '@/lib/api'
 import { deriveCategories } from '@/lib/categories'
 import { useAuth } from '@/hooks/useAuth'
-import { getStoredEmail, storeEmail, clearToken, getValidToken } from '@/lib/auth'
+import { getStoredEmail, storeEmail, clearToken, getValidToken, authHeaders } from '@/lib/auth'
 import { getSavedCards, toggleSavedCard } from '@/lib/savedCards'
 
 type Step = 'catalog' | 'configure' | 'payment' | 'success'
@@ -189,26 +189,63 @@ function SavedView({
   )
 }
 
-function ActivityView({ connected, orderId, email }: { connected: boolean; orderId: string | null; email: string }) {
-  const [animate, setAnimate] = useState(false)
+function useStats(address?: string) {
+  const [stats, setStats] = useState<OrderStats | null>(null)
+  const [loading, setLoading] = useState(true)
   useEffect(() => {
-    const t = setTimeout(() => setAnimate(true), 80)
-    return () => clearTimeout(t)
-  }, [])
+    if (!address) { setLoading(false); return }
+    let cancelled = false
+    setLoading(true)
+    getOrderStats(address, authHeaders(address))
+      .then((s) => { if (!cancelled) setStats(s) })
+      .catch(() => { if (!cancelled) setStats(null) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [address])
+  return { stats, loading }
+}
 
-  const activityRows = [
-    connected ? 'Wallet connected' : 'Wallet not connected',
-    email ? `Email saved: ${email}` : 'No email saved yet',
-    orderId ? `Latest order created: ${orderId}` : 'No order created yet',
-  ]
-  const weeklyOrders = [1, 2, 1, 3, 2, 4, 3]
-  const total = weeklyOrders.reduce((a, b) => a + b, 0)
+function statusLabel(s: string): string {
+  if (s === 'delivered') return 'Delivered'
+  if (s === 'failed') return 'Failed'
+  if (s === 'refunded') return 'Refunded'
+  if (s === 'pending_payment') return 'Awaiting payment'
+  return 'Processing'
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
+function ActivityView({ address }: { address?: string }) {
+  const { stats, loading } = useStats(address)
+  const [animate, setAnimate] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setAnimate(true), 80); return () => clearTimeout(t) }, [stats])
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-full min-h-[40vh]"><div className="w-8 h-8 rounded-full border-2 border-[#2b2bf5] border-t-transparent animate-spin" /></div>
+  }
+  if (!stats || stats.totalOrders === 0) {
+    return (
+      <EmptyState icon={Activity} title="No activity yet" sub="Your orders and activity will appear here once you make your first purchase." />
+    )
+  }
+
+  const maxDay = Math.max(1, ...stats.ordersByDay.map((d) => d.count))
+  const weekTotal = stats.ordersByDay.reduce((a, d) => a + d.count, 0)
+  const mix = stats.statusMix
+  const mixTotal = Math.max(1, mix.completed + mix.pending + mix.failed)
   const statusData = [
-    { label: 'Completed', value: 62, color: '#2b2bf5' },
-    { label: 'Pending', value: 28, color: '#7c83ff' },
-    { label: 'Failed', value: 10, color: '#b7bcff' },
+    { label: 'Completed', value: mix.completed, color: '#2b2bf5' },
+    { label: 'Pending', value: mix.pending, color: '#7c83ff' },
+    { label: 'Failed', value: mix.failed, color: '#b7bcff' },
   ]
-  const statusTotal = statusData.reduce((acc, s) => acc + s.value, 0)
   const radius = 46
   const circumference = 2 * Math.PI * radius
   let offsetCursor = 0
@@ -221,9 +258,13 @@ function ActivityView({ connected, orderId, email }: { connected: boolean; order
           <h2 className="text-sm font-semibold text-gray-800">Recent Activity</h2>
         </div>
         <div className="space-y-2.5">
-          {activityRows.map((row) => (
-            <div key={row} className="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-600">
-              {row}
+          {stats.recentOrders.map((o) => (
+            <div key={o.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50">
+              <div>
+                <p className="text-sm text-gray-700">{o.brandName} · ${o.faceValue}</p>
+                <p className="text-[11px] text-gray-400">{statusLabel(o.status)} · {timeAgo(o.createdAt)}</p>
+              </div>
+              <span className="text-xs font-medium text-gray-500">${o.coinAmount.toFixed(2)}</span>
             </div>
           ))}
         </div>
@@ -232,20 +273,17 @@ function ActivityView({ connected, orderId, email }: { connected: boolean; order
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-gray-800">Orders (Last 7 Days)</h3>
-          <span className="text-xs text-gray-400">{total} total</span>
+          <span className="text-xs text-gray-400">{weekTotal} total</span>
         </div>
         <div className="flex items-end gap-2 h-32">
-          {weeklyOrders.map((v, i) => {
-            const pct = Math.max(12, (v / 4) * 100)
+          {stats.ordersByDay.map((d, i) => {
+            const pct = d.count === 0 ? 4 : Math.max(12, (d.count / maxDay) * 100)
             return (
-              <div key={`${v}-${i}`} className="flex-1 h-full flex flex-col items-center gap-1">
+              <div key={i} className="flex-1 h-full flex flex-col items-center gap-1">
                 <div className="w-full flex-1 bg-[#eef0ff] rounded-md overflow-hidden flex items-end">
-                  <div
-                    className="w-full rounded-md transition-all duration-700"
-                    style={{ backgroundColor: '#2b2bf5', height: animate ? `${pct}%` : '0%' }}
-                  />
+                  <div className="w-full rounded-md transition-all duration-700" style={{ backgroundColor: '#2b2bf5', height: animate ? `${pct}%` : '0%' }} />
                 </div>
-                <span className="text-[10px] text-gray-400">{['M', 'T', 'W', 'T', 'F', 'S', 'S'][i]}</span>
+                <span className="text-[10px] text-gray-400">{d.label[0]}</span>
               </div>
             )
           })}
@@ -259,32 +297,21 @@ function ActivityView({ connected, orderId, email }: { connected: boolean; order
             <svg width="120" height="120" viewBox="0 0 120 120" className="-rotate-90">
               <circle cx="60" cy="60" r={radius} fill="none" stroke="#eef0ff" strokeWidth="12" />
               {statusData.map((item) => {
-                const segment = (item.value / statusTotal) * circumference
+                const segment = (item.value / mixTotal) * circumference
                 const strokeDasharray = `${segment} ${circumference - segment}`
                 const strokeDashoffset = -offsetCursor
                 offsetCursor += segment
                 return (
-                  <circle
-                    key={item.label}
-                    cx="60"
-                    cy="60"
-                    r={radius}
-                    fill="none"
-                    stroke={item.color}
-                    strokeWidth="12"
-                    strokeDasharray={animate ? strokeDasharray : `0 ${circumference}`}
-                    strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round"
-                    style={{ transition: 'stroke-dasharray 800ms ease' }}
-                  />
+                  <circle key={item.label} cx="60" cy="60" r={radius} fill="none" stroke={item.color} strokeWidth="12"
+                    strokeDasharray={animate ? strokeDasharray : `0 ${circumference}`} strokeDashoffset={strokeDashoffset}
+                    strokeLinecap="round" style={{ transition: 'stroke-dasharray 800ms ease' }} />
                 )
               })}
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-xs text-gray-500">100%</span>
+              <span className="text-sm font-semibold text-gray-700">{stats.totalOrders}</span>
             </div>
           </div>
-
           <div className="flex-1 space-y-2">
             {statusData.map((item) => (
               <div key={item.label} className="flex items-center justify-between text-xs">
@@ -292,7 +319,7 @@ function ActivityView({ connected, orderId, email }: { connected: boolean; order
                   <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
                   <span className="text-gray-600">{item.label}</span>
                 </div>
-                <span className="text-gray-500 font-medium">{item.value}%</span>
+                <span className="text-gray-500 font-medium">{item.value}</span>
               </div>
             ))}
           </div>
@@ -302,107 +329,97 @@ function ActivityView({ connected, orderId, email }: { connected: boolean; order
   )
 }
 
-function SpendView({ orderId, paymentAddress }: { orderId: string | null; paymentAddress: string }) {
-  const [animate, setAnimate] = useState(false)
-  useEffect(() => {
-    const t = setTimeout(() => setAnimate(true), 80)
-    return () => clearTimeout(t)
-  }, [])
+const SPEND_COLORS = ['#2b2bf5', '#5a5af8', '#7c83ff', '#a3a8ff', '#c4c8ff']
 
-  const spendData = [
-    { label: 'Gift Cards', value: 76, color: '#2b2bf5' },
-    { label: 'Fees', value: 18, color: '#7c83ff' },
-    { label: 'Other', value: 6, color: '#b7bcff' },
-  ]
-  const total = spendData.reduce((acc, s) => acc + s.value, 0)
+function SpendView({ address }: { address?: string }) {
+  const { stats, loading } = useStats(address)
+  const [animate, setAnimate] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setAnimate(true), 80); return () => clearTimeout(t) }, [stats])
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-full min-h-[40vh]"><div className="w-8 h-8 rounded-full border-2 border-[#2b2bf5] border-t-transparent animate-spin" /></div>
+  }
+  if (!stats || stats.totalOrders === 0) {
+    return <EmptyState icon={DollarSign} title="No spend yet" sub="Once you buy your first card, your spend breakdown will show up here." />
+  }
+
+  const completed = stats.statusMix.completed
+  const avg = completed > 0 ? stats.totalSpentUsdc / completed : 0
+  const breakdown = stats.topBrands.map((b, i) => ({ ...b, color: SPEND_COLORS[i % SPEND_COLORS.length] }))
+  const totalSpent = Math.max(0.01, stats.totalSpentUsdc)
   const radius = 52
   const circumference = 2 * Math.PI * radius
   let offsetCursor = 0
 
   return (
     <div className="px-5 py-5">
-      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-4">
-        <div className="flex items-center gap-2 mb-4">
-          <DollarSign size={16} className="text-[--color-brand]" />
-          <h2 className="text-sm font-semibold text-gray-800">Current Spend Context</h2>
-        </div>
-        <div className="space-y-2.5">
-          <div className="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-600">
-            {orderId ? `Open order: ${orderId}` : 'No active order in progress'}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {[
+          { label: 'Total spent', value: `$${stats.totalSpentUsdc.toFixed(2)}` },
+          { label: 'Cards bought', value: String(completed) },
+          { label: 'Avg / card', value: `$${avg.toFixed(2)}` },
+        ].map((s) => (
+          <div key={s.label} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
+            <p className="text-lg font-bold text-gray-900">{s.value}</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">{s.label}</p>
           </div>
-          <div className="px-3 py-2.5 rounded-lg border border-gray-100 bg-gray-50 text-sm text-gray-600 break-all">
-            {paymentAddress ? `Payment address: ${paymentAddress}` : 'Payment address will appear after creating an order'}
-          </div>
-        </div>
+        ))}
       </div>
 
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-800 mb-4">Spend Breakdown</h3>
-        <div className="flex flex-col md:flex-row md:items-center gap-6 mb-5">
-          <div className="mx-auto md:mx-0 relative w-[132px] h-[132px]">
-            <svg width="132" height="132" viewBox="0 0 132 132" className="-rotate-90">
-              <circle cx="66" cy="66" r={radius} fill="none" stroke="#eef0ff" strokeWidth="14" />
-              {spendData.map((item) => {
-                const segment = (item.value / total) * circumference
-                const strokeDasharray = `${segment} ${circumference - segment}`
-                const strokeDashoffset = -offsetCursor
-                offsetCursor += segment
-                return (
-                  <circle
-                    key={item.label}
-                    cx="66"
-                    cy="66"
-                    r={radius}
-                    fill="none"
-                    stroke={item.color}
-                    strokeWidth="14"
-                    strokeDasharray={animate ? strokeDasharray : `0 ${circumference}`}
-                    strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round"
-                    style={{ transition: 'stroke-dasharray 800ms ease' }}
-                  />
-                )
-              })}
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-lg font-semibold text-gray-800">{total}%</span>
-              <span className="text-[11px] text-gray-400">allocated</span>
-            </div>
-          </div>
-
-          <div className="flex-1 space-y-2">
-            {spendData.map((item) => (
-              <div key={`legend-${item.label}`} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-gray-600">{item.label}</span>
+        <h3 className="text-sm font-semibold text-gray-800 mb-4">Spend by Brand</h3>
+        {breakdown.length === 0 ? (
+          <p className="text-xs text-gray-400">No completed purchases yet.</p>
+        ) : (
+          <>
+            <div className="flex flex-col md:flex-row md:items-center gap-6 mb-5">
+              <div className="mx-auto md:mx-0 relative w-[132px] h-[132px]">
+                <svg width="132" height="132" viewBox="0 0 132 132" className="-rotate-90">
+                  <circle cx="66" cy="66" r={radius} fill="none" stroke="#eef0ff" strokeWidth="14" />
+                  {breakdown.map((item) => {
+                    const segment = (item.value / totalSpent) * circumference
+                    const strokeDasharray = `${segment} ${circumference - segment}`
+                    const strokeDashoffset = -offsetCursor
+                    offsetCursor += segment
+                    return (
+                      <circle key={item.label} cx="66" cy="66" r={radius} fill="none" stroke={item.color} strokeWidth="14"
+                        strokeDasharray={animate ? strokeDasharray : `0 ${circumference}`} strokeDashoffset={strokeDashoffset}
+                        strokeLinecap="round" style={{ transition: 'stroke-dasharray 800ms ease' }} />
+                    )
+                  })}
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-base font-semibold text-gray-800">${stats.totalSpentUsdc.toFixed(0)}</span>
+                  <span className="text-[11px] text-gray-400">total</span>
                 </div>
-                <span className="text-gray-500 font-medium">{item.value}%</span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-3 mb-4">
-          {spendData.map((item) => (
-            <div key={item.label}>
-              <div className="flex justify-between text-xs text-gray-500 mb-1">
-                <span>{item.label}</span>
-                <span>{item.value}%</span>
-              </div>
-              <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full transition-all duration-700"
-                  style={{ backgroundColor: item.color, width: animate ? `${item.value}%` : '0%' }}
-                />
+              <div className="flex-1 space-y-2">
+                {breakdown.map((item) => (
+                  <div key={item.label} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="text-gray-600 truncate max-w-[140px]">{item.label}</span>
+                    </div>
+                    <span className="text-gray-500 font-medium">${item.value.toFixed(2)}</span>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
-
-        <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-500">
-          Animated placeholder metrics for now. Next step is wiring real spend totals from order history.
-        </div>
+            <div className="space-y-3">
+              {breakdown.map((item) => (
+                <div key={item.label}>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span className="truncate max-w-[160px]">{item.label}</span>
+                    <span>{Math.round((item.value / totalSpent) * 100)}%</span>
+                  </div>
+                  <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full transition-all duration-700" style={{ backgroundColor: item.color, width: animate ? `${(item.value / totalSpent) * 100}%` : '0%' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -706,9 +723,9 @@ export default function Home() {
                     />
                   </div>
                 ) : activeTab === 'activity' ? (
-                  <ActivityView connected={isConnected} orderId={orderId} email={savedEmail || email} />
+                  <ActivityView address={address} />
                 ) : activeTab === 'spend' ? (
-                  <SpendView orderId={orderId} paymentAddress={paymentAddress} />
+                  <SpendView address={address} />
                 ) : (
                   <div className="p-4 md:p-5">
                     <CardCatalog

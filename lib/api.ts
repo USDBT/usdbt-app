@@ -175,3 +175,25 @@ export async function getWalletBalances(address: string): Promise<WalletBalances
   if (!res.ok) throw new Error(data.error ?? 'failed to load balances')
   return data
 }
+
+export interface OrderStats {
+  totalOrders: number
+  recentOrders: Array<{
+    id: string
+    brandName: string
+    faceValue: number
+    coinAmount: number
+    status: OrderStatus['status']
+    createdAt: string
+  }>
+  ordersByDay: Array<{ label: string; count: number }>
+  statusMix: { completed: number; pending: number; failed: number }
+  totalSpentUsdc: number
+  topBrands: Array<{ label: string; value: number }>
+}
+
+export async function getOrderStats(address: string, authHeader: Record<string, string>): Promise<OrderStats> {
+  const res = await fetch(`/api/users/${address}/stats`, { headers: authHeader })
+  if (!res.ok) throw new Error('failed to load stats')
+  return res.json()
+}
