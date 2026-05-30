@@ -98,6 +98,7 @@ export async function listBrands(countryCode = 'US'): Promise<CRBrand[]> {
   for (const cat of categories) {
     if (cat.kind !== 'giftcard') continue   // skip mobile_recharge, nft_giftcard etc.
     for (const b of (cat.brands ?? [])) {
+      if (b.is_out_of_stock) continue        // skip unbuyable brands (0 products, null min/max)
       const key = String(b.family ?? b.brand ?? '')
       if (!key || seen.has(key)) continue   // deduplicate across categories
       seen.add(key)
