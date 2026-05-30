@@ -119,7 +119,11 @@ export async function fetchProducts(_page = 0): Promise<Product[]> {
   return Array.isArray(list) ? list.map(normalizeProduct).filter((p) => !!p.id) : []
 }
 
-export async function fetchProductDetail(familyName: string): Promise<Pick<Product, 'denominations' | 'range'>> {
+export async function fetchProductDetail(familyName: string): Promise<{
+  denominations: number[]
+  range: Product['range']
+  coinAmounts: Record<number, number>
+}> {
   const res = await fetch(`/api/products/${encodeURIComponent(familyName)}`)
   if (!res.ok) throw new Error('failed to load product details')
   const data = await res.json()
@@ -129,7 +133,8 @@ export async function fetchProductDetail(familyName: string): Promise<Pick<Produ
   const range = data.range && data.range.max > 0
     ? { min: Number(data.range.min), max: Number(data.range.max), step: Number(data.range.step ?? 1) }
     : null
-  return { denominations, range }
+  const coinAmounts: Record<number, number> = data.coinAmounts ?? {}
+  return { denominations, range, coinAmounts }
 }
 
 export async function createOrder(body: {

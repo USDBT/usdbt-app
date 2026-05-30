@@ -34,29 +34,35 @@ function normalizeBrand(b: CRBrand) {
 function normalizeProductOptions(options: CRProductOption[]): {
   denominations: number[]
   range: { min: number; max: number; step: number } | null
+  coinAmounts: Record<number, number>   // faceValue → exact USDC
 } {
-  if (!options.length) return { denominations: [], range: null }
+  if (!options.length) return { denominations: [], range: null, coinAmounts: {} }
 
-  const first = options[0]
-  const isRange = String(first.denomination).toLowerCase() === 'range'
+  const hasDynamic = options.some((o) => o.is_dynamic)
 
-  if (isRange) {
-    return {
-      denominations: [],
-      range: {
-        min: Number(first.min ?? 1),
-        max: Number(first.max ?? 500),
-        step: Number(first.step ?? 1),
-      },
-    }
+  if (hasDynamic) {
+    const dynOptions = options.filter((o) => o.is_dynamic)
+    const min = Math.min(...dynOptions.map((o) => Number(o.face_value?.amount?.min_price ?? 1)).filter(Boolean))
+    const max = Math.max(...dynOptions.map((o) => Number(o.face_value?.amount?.max_price ?? 500)).filter(Boolean))
+    const step = Number(dynOptions[0]?.face_value?.amount?.step ?? 1)
+    return { denominations: [], range: { min: min || 1, max: max || 500, step: step || 1 }, coinAmounts: {} }
   }
 
-  const denoms = options
-    .map((o) => Number(o.face_value ?? o.denomination))
-    .filter((n) => Number.isFinite(n) && n > 0)
-    .sort((a, b) => a - b)
+  const seen = new Set<number>()
+  const denominations: number[] = []
+  const coinAmounts: Record<number, number> = {}
 
-  return { denominations: denoms, range: null }
+  for (const o of options) {
+    const face = Number(o.face_value?.amount?.price ?? o.denomination.replace(/[^0-9.]/g, ''))
+    if (!Number.isFinite(face) || face <= 0 || seen.has(face)) continue
+    seen.add(face)
+    denominations.push(face)
+    const coin = Number(o.coin_amount)
+    if (Number.isFinite(coin)) coinAmounts[face] = coin
+  }
+
+  denominations.sort((a, b) => a - b)
+  return { denominations, range: null, coinAmounts }
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -91,9 +97,9 @@ productsRouter.get('/:id', async (req, res) => {
     }
 
     const options = await getProductOptions(familyName, 'US')
-    const { denominations, range } = normalizeProductOptions(options)
+    const { denominations, range, coinAmounts } = normalizeProductOptions(options)
 
-    const result = { id: familyName, name: brandName, denominations, range }
+    const result = { id: familyName, name: brandName, denominations, range, coinAmounts }
     productCache.set(familyName, { data: result, expiresAt: now + PRODUCT_TTL_MS })
     res.json(result)
   } catch (err) {

@@ -32,6 +32,7 @@ export function OrderForm({
   onOrder: (orderId: string, paymentAddress: string, email: string) => void
 }) {
   const [resolvedProduct, setResolvedProduct] = useState(product)
+  const [coinAmounts, setCoinAmounts] = useState<Record<number, number>>({})
   const [detailLoading, setDetailLoading] = useState(product.denominations.length === 0 && !product.range)
   const [detailError, setDetailError] = useState(false)
   const [customValue, setCustomValue] = useState(product.range?.min ? String(product.range.min) : '')
@@ -54,8 +55,9 @@ export function OrderForm({
       .then((detail) => {
         if (cancelled) return
         if (detail.denominations.length === 0 && !detail.range) { setDetailError(true); return }
-        const merged = { ...product, ...detail }
+        const merged = { ...product, denominations: detail.denominations, range: detail.range }
         setResolvedProduct(merged)
+        setCoinAmounts(detail.coinAmounts ?? {})
         if (detail.denominations.length > 0) setFixedInput(String(detail.denominations[0]))
         if (detail.range) setCustomValue(String(detail.range.min))
       })
@@ -282,8 +284,9 @@ export function OrderForm({
                       fetchProductDetail(product.id)
                         .then((detail) => {
                           if (detail.denominations.length === 0 && !detail.range) { setDetailError(true); return }
-                          const merged = { ...product, ...detail }
+                          const merged = { ...product, denominations: detail.denominations, range: detail.range }
                           setResolvedProduct(merged)
+                          setCoinAmounts(detail.coinAmounts ?? {})
                           if (detail.denominations.length > 0) setFixedInput(String(detail.denominations[0]))
                           if (detail.range) setCustomValue(String(detail.range.min))
                         })
@@ -375,7 +378,12 @@ export function OrderForm({
                   <span>Card value</span><span>${selectedValue}</span>
                 </div>
                 <div className="border-t border-gray-100 pt-2.5 flex justify-between text-sm font-semibold text-gray-800">
-                  <span>Exact USDC amount</span><span className="text-gray-400 text-xs font-normal">shown at payment</span>
+                  <span>You send</span>
+                  <span>
+                    {coinAmounts[selectedValue]
+                      ? `$${coinAmounts[selectedValue].toFixed(2)} USDC`
+                      : <span className="text-gray-400 text-xs font-normal">shown at payment</span>}
+                  </span>
                 </div>
                 <div className={`text-xs ${hasEnoughBalance ? 'text-emerald-600' : 'text-red-500'}`}>
                   {balancesLoading

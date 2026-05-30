@@ -46,12 +46,20 @@ export interface CRBrand {
 }
 
 export interface CRProductOption {
-  denomination: string | number   // "25" | "range"
-  face_value?: number
-  min?: number
-  max?: number
-  step?: number
-  currency?: string
+  product_id: string
+  denomination: string            // e.g. "5 USD", "10 USD"
+  coin_amount: string             // exact USDC amount e.g. "5.32"
+  is_dynamic: boolean             // true = range/variable product
+  face_value: {
+    currency_code: string
+    amount: {
+      type: 'fixed' | 'range'
+      price?: string              // for fixed
+      min_price?: string          // for range
+      max_price?: string
+      step?: string
+    }
+  }
 }
 
 export interface CROrder {
@@ -110,8 +118,9 @@ export async function getProductOptions(
   const raw = await crFetch<any>(
     `/v5/products/country/${countryCode}?family_name=${encodeURIComponent(familyName)}&coin=USDC&lang=en`,
   )
-  const list: any[] = Array.isArray(raw) ? raw : (raw.products ?? raw.data ?? raw.items ?? [])
-  return list as CRProductOption[]
+  // Response: [{country_code, category, kind, products: [{product_id, denomination, coin_amount, ...}]}]
+  const wrappers: any[] = Array.isArray(raw) ? raw : [raw]
+  return wrappers.flatMap((w) => w.products ?? []) as CRProductOption[]
 }
 
 // ── Orders ───────────────────────────────────────────────────────────────────
