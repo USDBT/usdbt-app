@@ -375,8 +375,8 @@ export function CardCatalog({
                   key={p.id}
                   className={`relative text-left p-3.5 rounded-xl border transition-all min-h-[130px] flex flex-col ${
                     selectedProduct?.id === p.id
-                      ? 'border-[--color-brand] bg-[--color-brand-light]'
-                      : 'border-gray-100 bg-white hover:border-gray-300 hover:shadow-sm'
+                      ? 'border-[#2b2bf5] bg-[#eef0ff] shadow-[0_0_0_1px_rgba(43,43,245,0.3),0_0_16px_rgba(43,43,245,0.2)]'
+                      : 'border-[rgba(43,43,245,0.15)] bg-white hover:border-[rgba(43,43,245,0.4)] hover:shadow-[0_0_0_1px_rgba(43,43,245,0.2),0_0_20px_rgba(43,43,245,0.15)]'
                   }`}
                 >
                   {onToggleSave && (
