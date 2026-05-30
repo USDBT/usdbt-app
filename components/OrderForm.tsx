@@ -148,24 +148,44 @@ export function OrderForm({
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Header */}
-      <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
-        <div className="flex items-start justify-between mb-4">
-          <div className="w-10 h-10 rounded-xl bg-[--color-brand-light] flex items-center justify-center overflow-hidden flex-shrink-0">
-            {p.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={p.image} alt="" className="w-full h-full object-contain p-1"
-                onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-            ) : (
-              <span className="text-[--color-brand] font-bold text-lg">{p.name[0]}</span>
-            )}
+      {/* Header — blurred brand image bg */}
+      <div className="relative overflow-hidden flex-shrink-0">
+        {/* Blurred bg image */}
+        {p.image && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={p.image}
+            alt=""
+            aria-hidden
+            className="absolute inset-0 w-full h-full object-cover scale-150 blur-2xl"
+            style={{ filter: 'blur(24px)', transform: 'scale(1.6)' }}
+          />
+        )}
+        {/* Tint overlay */}
+        <div className="absolute inset-0" style={{ backgroundColor: p.image ? 'rgba(20,20,60,0.62)' : '#2b2bf5' }} />
+        {/* Content */}
+        <div className="relative z-10 px-5 pt-4 pb-5">
+          <div className="flex justify-end mb-3">
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-white/70 hover:text-white"
+            >
+              <X size={15} />
+            </button>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400">
-            <X size={15} />
-          </button>
+          <h2
+            className="text-lg font-bold text-white leading-tight"
+            style={{ textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}
+          >
+            {p.name}
+          </h2>
+          <p
+            className="text-xs text-white/70 mt-0.5"
+            style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}
+          >
+            Gift Card · {detailLoading ? 'Loading…' : priceLabel(p)}
+          </p>
         </div>
-        <h2 className="text-lg font-semibold text-gray-900 leading-tight">{p.name}</h2>
-        <p className="text-xs text-gray-400 mt-0.5">Gift Card · {detailLoading ? 'Loading…' : priceLabel(p)}</p>
       </div>
 
       {/* Tabs */}
@@ -249,7 +269,23 @@ export function OrderForm({
                     <Plus size={16} />
                   </button>
                 </div>
-              ) : null}
+              ) : (
+                // No denomination data — free-entry fallback
+                <div className="flex items-stretch gap-2">
+                  <div className="flex-1 relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
+                    <input
+                      type="number"
+                      min={5}
+                      step={1}
+                      value={customValue}
+                      onChange={(e) => setCustomValue(e.target.value)}
+                      placeholder="Enter amount"
+                      className="w-full h-12 pl-7 pr-3 text-center text-base font-semibold border-2 border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
+                    />
+                  </div>
+                </div>
+              )}
               {product.range && !inRange && selectedValue > 0 && (
                 <p className="text-xs text-red-500 mt-2">
                   Amount must be ${p.range?.min}–${p.range?.max}
