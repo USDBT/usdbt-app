@@ -161,8 +161,8 @@ function stepVariable(dir: 1 | -1) {
         <div className="absolute inset-0" style={{ backgroundColor: p.image ? 'rgba(20,20,60,0.62)' : '#2b2bf5' }} />
         {/* Bottom fade — merges header into the form below */}
         <div
-          className="absolute inset-x-0 bottom-0 h-6 z-[5] pointer-events-none"
-          style={{ background: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.6) 100%)' }}
+          className="absolute inset-x-0 bottom-0 h-10 z-[5] pointer-events-none"
+          style={{ background: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.7) 70%, #fff 100%)' }}
         />
         {/* Content */}
         <div className="relative z-10 px-5 pt-4 pb-5">
