@@ -154,11 +154,16 @@ function stepVariable(dir: 1 | -1) {
             alt=""
             aria-hidden
             className="absolute inset-0 w-full h-full object-cover"
-            style={{ filter: 'blur(12px)', transform: 'scale(1.4)' }}
+            style={{ filter: 'blur(6px)', transform: 'scale(1.25)' }}
           />
         )}
         {/* Tint overlay */}
         <div className="absolute inset-0" style={{ backgroundColor: p.image ? 'rgba(20,20,60,0.62)' : '#2b2bf5' }} />
+        {/* Bottom fade — merges header into the form below */}
+        <div
+          className="absolute inset-x-0 bottom-0 h-12 z-[5] pointer-events-none"
+          style={{ background: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.85) 80%, #fff 100%)', backdropFilter: 'blur(2px)' }}
+        />
         {/* Content */}
         <div className="relative z-10 px-5 pt-4 pb-5">
           <div className="flex justify-end mb-3">

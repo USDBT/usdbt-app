@@ -1,6 +1,7 @@
 import { sql } from '../lib/db'
 import { getCROrder } from '../lib/cryptorefills'
 import { ORDER_STATUS } from '../lib/order-status'
+import { sendDeliveryEmail } from '../lib/email'
 
 const POLL_INTERVAL_MS = 15_000
 
@@ -44,7 +45,7 @@ export function startPoller(intervalMs = POLL_INTERVAL_MS): void {
 
 async function pollActiveOrders(): Promise<void> {
   const active = await sql`
-    SELECT id, cr_order_id, status, expires_at
+    SELECT id, cr_order_id, status, expires_at, email, brand_name, face_value
     FROM orders
     WHERE cr_order_id IS NOT NULL
       AND status NOT IN (
@@ -81,6 +82,14 @@ async function pollActiveOrders(): Promise<void> {
 
       if (TERMINAL.has(newStatus)) {
         console.log(`[poller] order ${order.id} → ${newStatus} (CR: ${crOrder.order_state})`)
+      }
+
+      // Send a branded confirmation once, when the order is first delivered
+      if (newStatus === ORDER_STATUS.DELIVERED && order.email) {
+        sendDeliveryEmail(order.email, {
+          brandName: order.brand_name,
+          faceValue: Number(order.face_value),
+        }).catch(() => {})
       }
     } catch (err) {
       console.error(`[poller] error checking order ${order.id}:`, err)
