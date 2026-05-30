@@ -78,8 +78,29 @@ export interface CROrderInput {
 
 export async function listBrands(countryCode = 'US'): Promise<CRBrand[]> {
   const raw = await crFetch<any>(`/v2/brands?country_code=${countryCode}`)
-  const list: any[] = Array.isArray(raw) ? raw : (raw.brands ?? raw.data ?? raw.items ?? [])
-  return list as CRBrand[]
+
+  // Response: { categories: [{ kind, category, brands: [...] }] }
+  const categories: any[] = raw.categories ?? []
+  const seen = new Set<string>()
+  const brands: CRBrand[] = []
+
+  for (const cat of categories) {
+    if (cat.kind !== 'giftcard') continue   // skip mobile_recharge, nft_giftcard etc.
+    for (const b of (cat.brands ?? [])) {
+      const key = String(b.family ?? b.brand ?? '')
+      if (!key || seen.has(key)) continue   // deduplicate across categories
+      seen.add(key)
+      brands.push({
+        family_name: key,
+        brand_name: String(b.brand ?? key),
+        logo_url: b.logo_url,
+        logo_base_url: b.logo_base_url,
+        categories: [cat.category],
+      })
+    }
+  }
+
+  return brands
 }
 
 export async function getProductOptions(
