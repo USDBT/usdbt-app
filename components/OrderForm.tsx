@@ -74,12 +74,13 @@ export function OrderForm({
   )
 
   const selectedValue = p.range ? parseFloat(customValue) || 0 : parseFloat(fixedInput) || 0
+  const exactUsdc = coinAmounts[selectedValue] ?? null
   const inRange = p.range ? selectedValue >= p.range.min && selectedValue <= p.range.max : true
   const emailValid = email.includes('@')
-  const fixedValid = p.range ? true : sortedDenominations.length === 0 || sortedDenominations.includes(selectedValue)
-  const hasEnoughBalance = usdcBalance === null ? true : usdcBalance >= selectedValue
+  // carousel selection always produces a valid denomination; stepper can't go out of range
+  const hasEnoughBalance = usdcBalance === null ? true : usdcBalance >= (exactUsdc ?? selectedValue)
 
-  const valid = !detailLoading && !detailError && selectedValue > 0 && emailValid && inRange && fixedValid && hasEnoughBalance
+  const valid = !detailLoading && !detailError && selectedValue > 0 && emailValid && inRange && hasEnoughBalance
 
   useEffect(() => {
     let cancelled = false
@@ -99,16 +100,7 @@ export function OrderForm({
     return () => { cancelled = true }
   }, [walletAddress])
 
-  function stepFixed(dir: 1 | -1) {
-    if (sortedDenominations.length === 0) return
-    const current = parseFloat(fixedInput) || sortedDenominations[0]
-    const idx = sortedDenominations.findIndex(d => d === current)
-    const fallback = idx >= 0 ? idx : 0
-    const next = sortedDenominations[Math.max(0, Math.min(sortedDenominations.length - 1, fallback + dir))]
-    setFixedInput(String(next))
-  }
-
-  function stepVariable(dir: 1 | -1) {
+function stepVariable(dir: 1 | -1) {
     if (!p.range) return
     const step = p.range.step || 1
     const next = Math.max(p.range.min, Math.min(p.range.max,
@@ -217,65 +209,12 @@ export function OrderForm({
             <div>
               <SectionLabel icon={DollarSign} text="Amount" />
               {detailLoading ? (
-                <div className="flex items-center justify-center h-12">
+                <div className="flex items-center justify-center h-16">
                   <div className="w-5 h-5 rounded-full border-2 border-[#2b2bf5] border-t-transparent animate-spin" />
                 </div>
-              ) : p.denominations.length > 0 ? (
-                <div className="flex items-stretch gap-2">
-                  <button
-                    type="button"
-                    onClick={() => stepFixed(-1)}
-                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all"
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <input
-                    type="number"
-                    value={fixedInput}
-                    onChange={(e) => setFixedInput(e.target.value)}
-                    className="flex-1 h-12 px-3 text-center text-base font-semibold border-2 border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => stepFixed(1)}
-                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-              ) : p.range ? (
-                <div className="flex items-stretch gap-2">
-                  <button
-                    type="button"
-                    onClick={() => stepVariable(-1)}
-                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all"
-                  >
-                    <Minus size={16} />
-                  </button>
-                  <div className="flex-1 relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
-                    <input
-                      type="number"
-                      min={p.range.min}
-                      max={p.range.max}
-                      step={p.range.step}
-                      value={customValue}
-                      onChange={(e) => setCustomValue(e.target.value)}
-                      placeholder={String(p.range.min)}
-                      className="w-full h-12 pl-7 pr-3 text-center text-base font-semibold border-2 border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => stepVariable(1)}
-                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-              ) : (
+              ) : detailError ? (
                 <div className="flex flex-col items-center gap-2 py-3">
-                  <p className="text-xs text-gray-400 text-center">Could not load product options.</p>
+                  <p className="text-xs text-gray-400">Could not load product options.</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -284,8 +223,7 @@ export function OrderForm({
                       fetchProductDetail(product.id)
                         .then((detail) => {
                           if (detail.denominations.length === 0 && !detail.range) { setDetailError(true); return }
-                          const merged = { ...product, denominations: detail.denominations, range: detail.range }
-                          setResolvedProduct(merged)
+                          setResolvedProduct({ ...product, denominations: detail.denominations, range: detail.range })
                           setCoinAmounts(detail.coinAmounts ?? {})
                           if (detail.denominations.length > 0) setFixedInput(String(detail.denominations[0]))
                           if (detail.range) setCustomValue(String(detail.range.min))
@@ -298,14 +236,56 @@ export function OrderForm({
                     Retry
                   </button>
                 </div>
-              )}
-              {product.range && !inRange && selectedValue > 0 && (
-                <p className="text-xs text-red-500 mt-2">
-                  Amount must be ${p.range?.min}–${p.range?.max}
-                </p>
-              )}
-              {!p.range && !fixedValid && selectedValue > 0 && (
-                <p className="text-xs text-red-500 mt-2">Not a valid denomination for this card.</p>
+              ) : p.denominations.length > 0 ? (
+                /* Fixed denomination carousel */
+                <div className="flex gap-2 overflow-x-auto pb-1 snap-x" style={{ scrollbarWidth: 'none' }}>
+                  {sortedDenominations.map((d) => {
+                    const selected = parseFloat(fixedInput) === d
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setFixedInput(String(d))}
+                        className={`flex-shrink-0 snap-start flex flex-col items-center px-4 py-2.5 rounded-xl border-2 transition-all ${
+                          selected
+                            ? 'border-[#2b2bf5] bg-[#2b2bf5] text-white shadow-[inset_4px_4px_8px_rgba(255,255,255,0.12),inset_-4px_-4px_8px_rgba(255,255,255,0.12)]'
+                            : 'border-[rgba(43,43,245,0.2)] bg-white text-gray-700 hover:border-[#2b2bf5]/60'
+                        }`}
+                      >
+                        <span className="text-sm font-bold">${d}</span>
+                        {coinAmounts[d] && (
+                          <span className={`text-[10px] mt-0.5 ${selected ? 'text-white/70' : 'text-gray-400'}`}>
+                            {coinAmounts[d].toFixed(2)} USDC
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : p.range ? (
+                /* Range stepper */
+                <div className="flex items-stretch gap-2">
+                  <button type="button" onClick={() => stepVariable(-1)}
+                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all">
+                    <Minus size={16} />
+                  </button>
+                  <div className="flex-1 relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
+                    <input
+                      type="number" min={p.range.min} max={p.range.max} step={p.range.step}
+                      value={customValue} onChange={(e) => setCustomValue(e.target.value)}
+                      placeholder={String(p.range.min)}
+                      className="w-full h-12 pl-7 pr-3 text-center text-base font-semibold border-2 border-gray-200 rounded-xl outline-none focus:border-[#2b2bf5] bg-gray-50 focus:bg-white transition-colors"
+                    />
+                  </div>
+                  <button type="button" onClick={() => stepVariable(1)}
+                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all">
+                    <Plus size={16} />
+                  </button>
+                </div>
+              ) : null}
+              {p.range && !inRange && selectedValue > 0 && (
+                <p className="text-xs text-red-500 mt-2">Amount must be ${p.range.min}–${p.range.max}</p>
               )}
             </div>
 
@@ -371,28 +351,25 @@ export function OrderForm({
               )}
             </div>
 
-            {/* Price summary */}
-            {selectedValue > 0 && (
-              <div className="space-y-2.5">
+            {/* Price summary — only show when a valid denomination is selected */}
+            {selectedValue > 0 && (exactUsdc !== null || p.range) && (
+              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
                 <div className="flex justify-between text-sm text-gray-500">
                   <span>Card value</span><span>${selectedValue}</span>
                 </div>
-                <div className="border-t border-gray-100 pt-2.5 flex justify-between text-sm font-semibold text-gray-800">
-                  <span>You send</span>
-                  <span>
-                    {coinAmounts[selectedValue]
-                      ? `$${coinAmounts[selectedValue].toFixed(2)} USDC`
-                      : <span className="text-gray-400 text-xs font-normal">shown at payment</span>}
-                  </span>
-                </div>
-                <div className={`text-xs ${hasEnoughBalance ? 'text-emerald-600' : 'text-red-500'}`}>
+                {exactUsdc !== null && (
+                  <div className="flex justify-between text-sm font-semibold text-gray-800">
+                    <span>You send</span><span>${exactUsdc.toFixed(2)} USDC</span>
+                  </div>
+                )}
+                <div className={`text-xs pt-0.5 ${hasEnoughBalance ? 'text-emerald-600' : 'text-red-500'}`}>
                   {balancesLoading
                     ? 'Checking wallet balance…'
                     : usdcBalance === null
-                      ? 'Could not verify wallet balance right now.'
+                      ? ''
                       : hasEnoughBalance
-                        ? `Balance OK: ${usdcBalance.toFixed(2)} USDC available`
-                        : `Insufficient: ${usdcBalance.toFixed(2)} USDC available`}
+                        ? `${usdcBalance.toFixed(2)} USDC available ✓`
+                        : `Insufficient — you have ${usdcBalance.toFixed(2)} USDC`}
                 </div>
               </div>
             )}
