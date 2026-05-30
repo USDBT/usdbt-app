@@ -337,7 +337,7 @@ export function OrderForm({
           <button
             onClick={submit}
             disabled={!valid || loading}
-            className="w-full py-3 bg-[--color-brand] hover:bg-[--color-brand-hover] text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-[inset_6px_6px_14px_rgba(255,255,255,0.07),inset_-6px_-6px_14px_rgba(255,255,255,0.07)] hover:shadow-[inset_8px_8px_20px_rgba(255,255,255,0.14),inset_-8px_-8px_20px_rgba(255,255,255,0.14)]"
+            className="w-full py-3 bg-[--color-brand] hover:bg-[--color-brand-hover] text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
             {loading && <span className="loading-bar-spinner" aria-hidden="true" />}
             {loading ? 'Creating order…' : 'Continue to payment'}
@@ -380,7 +380,7 @@ export function OrderForm({
               <p className="text-xs text-gray-400 mt-3">Hold $USDBT to unlock this feature when it launches.</p>
               <button
                 onClick={() => setShowUsdbtModal(false)}
-                className="mt-5 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all shadow-[inset_6px_6px_14px_rgba(255,255,255,0.07),inset_-6px_-6px_14px_rgba(255,255,255,0.07)] hover:shadow-[inset_8px_8px_20px_rgba(255,255,255,0.14),inset_-8px_-8px_20px_rgba(255,255,255,0.14)]"
+                className="mt-5 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
                 style={{ backgroundColor: '#2b2bf5' }}
               >
                 Got it
