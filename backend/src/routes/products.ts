@@ -16,13 +16,17 @@ const PRODUCT_TTL_MS = 30 * 60 * 1000  // 30 min
 
 function normalizeBrand(b: CRBrand) {
   const logoBase = b.logo_base_url ?? ''
+  const raw = b as any
+  const minNum = raw.min ? parseFloat(String(raw.min).replace(/[^0-9.]/g, '')) : 0
+  const maxNum = raw.max ? parseFloat(String(raw.max).replace(/[^0-9.]/g, '')) : 0
+  const range = minNum > 0 && maxNum > 0 ? { min: minNum, max: maxNum, step: 1 } : null
   return {
     id: b.family_name,
     name: b.brand_name,
     type: 'gift_card',
     categories: b.categories ?? [],
     denominations: [] as number[],
-    range: null,
+    range,
     country: '',
     countryCode: 'US',
     currency: 'USD',

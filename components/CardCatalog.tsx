@@ -156,7 +156,7 @@ function ProductCard({
         <p className="text-xs text-gray-400 mt-1">{categoryLabel(product)}</p>
         <div className="mt-auto pt-2">
           {(product.denominations.length > 0 || product.range) && (
-            <p className="text-xs text-gray-500">{priceLabel(product)}</p>
+            <p className="text-xs font-medium text-gray-600">{priceLabel(product)}</p>
           )}
           <span className="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
             {brandType(product.denominations, product.range)}

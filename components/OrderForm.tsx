@@ -354,11 +354,11 @@ function stepVariable(dir: 1 | -1) {
             {/* Price summary — only show when a valid denomination is selected */}
             {selectedValue > 0 && (exactUsdc !== null || p.range) && (
               <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
-                <div className="flex justify-between text-sm text-gray-500">
+                <div className="flex items-center justify-between text-sm text-gray-500">
                   <span>Card value</span><span>${selectedValue}</span>
                 </div>
                 {exactUsdc !== null && (
-                  <div className="flex justify-between text-sm font-semibold text-gray-800">
+                  <div className="flex items-center justify-between text-sm font-semibold text-gray-800">
                     <span>You send</span><span>${exactUsdc.toFixed(2)} USDC</span>
                   </div>
                 )}
