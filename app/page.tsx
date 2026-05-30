@@ -19,9 +19,10 @@ import { SplashScreen } from '@/components/SplashScreen'
 import { CommandSearch } from '@/components/CommandSearch'
 import { SettingsDrawer } from '@/components/SettingsDrawer'
 import { HelpDrawer } from '@/components/HelpDrawer'
+import { EmailCaptureModal } from '@/components/EmailCaptureModal'
 import { fetchProducts, getOrderProgress, type Product, type OrderProgress } from '@/lib/api'
 import { useAuth } from '@/hooks/useAuth'
-import { getStoredEmail, clearToken, getValidToken } from '@/lib/auth'
+import { getStoredEmail, storeEmail, clearToken, getValidToken } from '@/lib/auth'
 import { getSavedCards, toggleSavedCard } from '@/lib/savedCards'
 
 type Step = 'catalog' | 'configure' | 'payment' | 'success'
@@ -523,6 +524,7 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [showEmailModal, setShowEmailModal] = useState(false)
   const [savedEmail, setSavedEmail] = useState('')
   const [savedCards, setSavedCards] = useState<Product[]>(() => getSavedCards())
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
@@ -531,7 +533,7 @@ export default function Home() {
     fetchProducts().then(setAllProducts).catch(() => {})
   }, [])
 
-  // After wallet connect: authenticate (SIWE → JWT), restore cached email quietly
+  // After wallet connect: authenticate (SIWE → JWT), then check user registration
   useEffect(() => {
     if (!isConnected || !address) {
       if (prevAddress.current) clearToken(prevAddress.current)
@@ -541,11 +543,32 @@ export default function Home() {
     }
     prevAddress.current = address
 
-    const localEmail = getStoredEmail(address)
-    if (localEmail) setSavedEmail(localEmail)
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
 
-    const t = setTimeout(() => {
-      if (!getValidToken(address)) authenticate(address).catch(() => {})
+    const t = setTimeout(async () => {
+      const localEmail = getStoredEmail(address)
+      if (localEmail) {
+        setSavedEmail(localEmail)
+        if (!getValidToken(address)) authenticate(address).catch(() => {})
+        return
+      }
+
+      const token = await authenticate(address)
+      if (!token) return
+
+      try {
+        const r = await fetch(`${backendUrl}/users/${address}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (r.status === 404) {
+          setShowEmailModal(true)
+        } else if (r.ok) {
+          const u = await r.json()
+          const email = u.email ?? ''
+          setSavedEmail(email)
+          storeEmail(email, address)
+        }
+      } catch {}
     }, 500)
 
     return () => clearTimeout(t)
@@ -621,6 +644,13 @@ export default function Home() {
 
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <HelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
+      {showEmailModal && address && (
+        <EmailCaptureModal
+          walletAddress={address}
+          onSaved={(email) => { setSavedEmail(email); setShowEmailModal(false) }}
+          onDismiss={() => setShowEmailModal(false)}
+        />
+      )}
 
       <div className="flex h-screen overflow-hidden bg-[--color-surface]">
         <Sidebar
