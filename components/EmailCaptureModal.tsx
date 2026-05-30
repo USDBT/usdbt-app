@@ -67,7 +67,7 @@ export function EmailCaptureModal({ walletAddress, onSaved, onDismiss }: Props) 
             <button
               type="submit"
               disabled={loading || !email.trim()}
-              className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-[inset_6px_6px_14px_rgba(255,255,255,0.12),inset_-6px_-6px_14px_rgba(255,255,255,0.12)] hover:shadow-[inset_8px_8px_20px_rgba(255,255,255,0.22),inset_-8px_-8px_20px_rgba(255,255,255,0.22)]"
+              className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-[inset_6px_6px_14px_rgba(255,255,255,0.22),inset_-6px_-6px_14px_rgba(255,255,255,0.22)] hover:shadow-[inset_8px_8px_20px_rgba(255,255,255,0.38),inset_-8px_-8px_20px_rgba(255,255,255,0.38)]"
               style={{ backgroundColor: '#2b2bf5' }}
             >
               {loading && <span className="loading-bar-spinner" aria-hidden="true" />}

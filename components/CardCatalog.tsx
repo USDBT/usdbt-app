@@ -376,7 +376,7 @@ export function CardCatalog({
                   className={`relative text-left p-3.5 rounded-xl border transition-all min-h-[130px] flex flex-col ${
                     selectedProduct?.id === p.id
                       ? 'border-[#2b2bf5] bg-[#eef0ff] shadow-[inset_6px_6px_14px_rgba(43,43,245,0.18),inset_-6px_-6px_14px_rgba(43,43,245,0.18)]'
-                      : 'border-[rgba(43,43,245,0.25)] bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.08),inset_-5px_-5px_12px_rgba(43,43,245,0.08)] hover:border-[rgba(43,43,245,0.5)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.16),inset_-7px_-7px_18px_rgba(43,43,245,0.16)]'
+                      : 'border-[rgba(43,43,245,0.3)] bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.18),inset_-5px_-5px_12px_rgba(43,43,245,0.18)] hover:border-[rgba(43,43,245,0.6)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.32),inset_-7px_-7px_18px_rgba(43,43,245,0.32)]'
                   }`}
                 >
                   {onToggleSave && (
