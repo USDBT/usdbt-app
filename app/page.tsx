@@ -137,7 +137,7 @@ function SavedCard({ product: p, index, onSelect, onToggleSave }: {
       onMouseEnter={() => setShineKey(k => k + 1)}
     >
       <div key={shineKey} className="card-shine-sweep" style={{ '--shine-delay': shineKey === 0 ? `${index * 60}ms` : '0ms' } as React.CSSProperties} />
-      <button onClick={() => onToggleSave(p)} className="absolute top-2.5 right-2.5 p-1 rounded-md transition-colors z-20" aria-label="Unsave">
+      <button onClick={() => onToggleSave(p)} className="absolute top-2.5 right-2.5 p-1 rounded-md transition-colors z-30" aria-label="Unsave">
         <Bookmark size={13} className="fill-[#2b2bf5] text-[#2b2bf5]" />
       </button>
       <button onClick={() => onSelect(p)} className="flex flex-col flex-1 text-left w-full relative z-10">

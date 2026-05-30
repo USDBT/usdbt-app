@@ -337,8 +337,14 @@ export function OrderForm({
           <button
             onClick={submit}
             disabled={!valid || loading}
-            className="w-full py-3 text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2" style={{ backgroundColor: '#2b2bf5' }}
+            className="relative overflow-hidden w-full py-3 text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            style={{ backgroundColor: '#2b2bf5' }}
+            onMouseEnter={(e) => {
+              const sweep = e.currentTarget.querySelector('.btn-shine') as HTMLElement
+              if (sweep) { sweep.style.animation = 'none'; sweep.offsetHeight; sweep.style.animation = '' }
+            }}
           >
+            <div className="btn-shine card-shine-sweep" />
             {loading && <span className="loading-bar-spinner" aria-hidden="true" />}
             {loading ? 'Creating order…' : 'Continue to payment'}
           </button>

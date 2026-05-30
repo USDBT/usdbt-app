@@ -67,9 +67,14 @@ export function EmailCaptureModal({ walletAddress, onSaved, onDismiss }: Props) 
             <button
               type="submit"
               disabled={loading || !email.trim()}
-              className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="relative overflow-hidden w-full py-3 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               style={{ backgroundColor: '#2b2bf5' }}
+              onMouseEnter={(e) => {
+                const sweep = e.currentTarget.querySelector('.btn-shine') as HTMLElement
+                if (sweep) { sweep.style.animation = 'none'; sweep.offsetHeight; sweep.style.animation = '' }
+              }}
             >
+              <div className="btn-shine card-shine-sweep" />
               {loading && <span className="loading-bar-spinner" aria-hidden="true" />}
               {loading ? 'Saving…' : 'Save & Continue'}
             </button>

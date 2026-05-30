@@ -155,7 +155,7 @@ body {
   overflow: hidden;
   border-radius: inherit;
   pointer-events: none;
-  z-index: 10;
+  z-index: 20;
 }
 
 .card-shine-sweep::after {

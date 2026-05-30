@@ -140,7 +140,7 @@ function ProductCard({
       {onToggleSave && (
         <button
           onClick={(e) => { e.stopPropagation(); onToggleSave(product) }}
-          className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/80 hover:bg-white shadow-sm transition-colors z-20"
+          className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/80 hover:bg-white shadow-sm transition-colors z-30"
           aria-label={isSaved ? 'Unsave' : 'Save'}
         >
           <Bookmark size={15} className={isSaved ? 'fill-[#2b2bf5] text-[#2b2bf5]' : 'text-gray-400'} />
