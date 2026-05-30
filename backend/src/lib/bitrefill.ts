@@ -62,6 +62,13 @@ export interface BitrefillInvoice {
   }>
 }
 
+const TELECOM_CATEGORIES = new Set(['refill', 'data', 'voip', 'bundles'])
+
+function isGiftCard(product: any): boolean {
+  const cats: string[] = (product.categories ?? []).map((c: string) => c.toLowerCase())
+  return !cats.some((c) => TELECOM_CATEGORIES.has(c))
+}
+
 export async function listProducts(page = 0): Promise<{ products: BitrefillProduct[] }> {
   const variants = [
     `/products?page=${page}&per_page=100&type=giftcard`,
@@ -73,11 +80,13 @@ export async function listProducts(page = 0): Promise<{ products: BitrefillProdu
   for (const path of variants) {
     try {
       const raw = await req<any>(path)
-      // Bitrefill v2 returns {meta, data:[...]}
-      if (Array.isArray(raw?.data)) return { products: raw.data as BitrefillProduct[] }
-      if (Array.isArray(raw?.products)) return { products: raw.products as BitrefillProduct[] }
-      if (Array.isArray(raw?.items)) return { products: raw.items as BitrefillProduct[] }
-      if (Array.isArray(raw)) return { products: raw as BitrefillProduct[] }
+      let list: any[] | null = null
+      if (Array.isArray(raw?.data)) list = raw.data
+      else if (Array.isArray(raw?.products)) list = raw.products
+      else if (Array.isArray(raw?.items)) list = raw.items
+      else if (Array.isArray(raw)) list = raw
+
+      if (list) return { products: list.filter(isGiftCard) as BitrefillProduct[] }
       errors.push(`Unexpected response shape for ${path}: ${JSON.stringify(raw).slice(0, 200)}`)
     } catch (err) {
       errors.push(`Request failed for ${path}: ${String(err)}`)
