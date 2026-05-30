@@ -63,13 +63,14 @@ export interface CRProductOption {
 }
 
 export interface CROrder {
-  id: string
-  status: string
-  wallet_address: string
+  order_id: string
+  order_state: string          // WaitingForPayment | PaymentReceived | WaitingForDelivery | Done | ...
+  payment_state?: string
+  wallet_address: string       // address the user pays to
   coin_amount: number | string
   coin?: string
   network?: string
-  expires_at?: string
+  payment_requested_at?: number  // unix seconds
 }
 
 export interface CROrderInput {
@@ -127,24 +128,25 @@ export async function getProductOptions(
 
 function buildOrderBody(input: CROrderInput) {
   const isRange = input.denomination === 'range'
-  const deliverable: Record<string, unknown> = {
+  const delivery: Record<string, unknown> = {
+    beneficiary_account: input.email,
     brand_name: input.brandName,
     country_code: input.countryCode,
-    denomination: isRange ? 'range' : String(input.denomination),
-    beneficiary_account: input.email,
+    denomination: isRange ? 'range' : `${input.denomination} USD`,
+    localized_denomination: isRange ? '$' : `$${input.denomination}`,
   }
   if (isRange && input.productValue != null) {
-    deliverable.product_value = input.productValue
-    deliverable.localized_denomination = '$'
+    delivery.product_value = input.productValue
   }
   return {
-    deliveries: [{ kind: 'giftcard', quantity: 1, deliverable }],
+    email: input.email,
     payment: {
       type: 'via',
       coin: 'USDC',
       network: 'Base',
       payment_via: 'USER_WALLET',
     },
+    deliveries: [delivery],
     user: { email: input.email, has_accepted_newsletter: false },
     lang: 'en',
     acquisition: { utm_source: 'usdbt' },

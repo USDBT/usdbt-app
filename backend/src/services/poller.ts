@@ -70,7 +70,7 @@ async function pollActiveOrders(): Promise<void> {
       }
 
       const crOrder = await getCROrder(order.cr_order_id)
-      const newStatus = mapCRStatus(crOrder.status)
+      const newStatus = mapCRStatus(crOrder.order_state)
 
       if (!newStatus || newStatus === order.status) continue
 
@@ -80,7 +80,7 @@ async function pollActiveOrders(): Promise<void> {
       `
 
       if (TERMINAL.has(newStatus)) {
-        console.log(`[poller] order ${order.id} → ${newStatus} (CR: ${crOrder.status})`)
+        console.log(`[poller] order ${order.id} → ${newStatus} (CR: ${crOrder.order_state})`)
       }
     } catch (err) {
       console.error(`[poller] error checking order ${order.id}:`, err)

@@ -53,8 +53,8 @@ ordersRouter.post('/', async (req, res) => {
   }
 
   const coinAmount = Number(crOrder.coin_amount)
-  const expiresAt = crOrder.expires_at
-    ? new Date(crOrder.expires_at)
+  const expiresAt = crOrder.payment_requested_at
+    ? new Date(crOrder.payment_requested_at * 1000 + ORDER_TTL_MINUTES * 60 * 1000)
     : new Date(Date.now() + ORDER_TTL_MINUTES * 60 * 1000)
 
   const [order] = await sql`
@@ -65,7 +65,7 @@ ordersRouter.post('/', async (req, res) => {
     VALUES
       (${walletAddress}, ${email}, 'gift_card', ${familyName}, ${brandName}, ${faceValue},
        'USDC', ${coinAmount}, 0, ${ORDER_STATUS.PENDING_PAYMENT}, ${expiresAt},
-       ${crOrder.id}, ${crOrder.wallet_address}, ${coinAmount})
+       ${crOrder.order_id}, ${crOrder.wallet_address}, ${coinAmount})
     RETURNING id, expires_at, cr_order_id, payment_address, coin_amount
   `
 
