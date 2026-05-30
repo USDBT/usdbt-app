@@ -45,10 +45,10 @@ function normalizeProductOptions(options: CRProductOption[]): {
   const hasDynamic = options.some((o) => o.is_dynamic)
 
   if (hasDynamic) {
-    const dynOptions = options.filter((o) => o.is_dynamic)
-    const min = Math.min(...dynOptions.map((o) => Number(o.face_value?.amount?.min_price ?? 1)).filter(Boolean))
-    const max = Math.max(...dynOptions.map((o) => Number(o.face_value?.amount?.max_price ?? 500)).filter(Boolean))
-    const step = Number(dynOptions[0]?.face_value?.amount?.step ?? 1)
+    const dyn = options.find((o) => o.is_dynamic)!
+    const min = Number(dyn.face_value?.amount?.min ?? 1)
+    const max = Number(dyn.face_value?.amount?.max ?? 500)
+    const step = Number(dyn.face_value?.amount?.step ?? 1)
     return { denominations: [], range: { min: min || 1, max: max || 500, step: step || 1 }, coinAmounts: {} }
   }
 

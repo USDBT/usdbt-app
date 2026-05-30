@@ -43,6 +43,8 @@ export interface CRBrand {
   logo_base_url?: string
   categories?: string[]
   countries?: string[]
+  min?: string   // e.g. "$5"
+  max?: string   // e.g. "$500"
 }
 
 export interface CRProductOption {
@@ -54,9 +56,9 @@ export interface CRProductOption {
     currency_code: string
     amount: {
       type: 'fixed' | 'range'
-      price?: string              // for fixed
-      min_price?: string          // for range
-      max_price?: string
+      price?: string   // for fixed, e.g. "5"
+      min?: string     // for range, e.g. "10.00"
+      max?: string     // for range, e.g. "500.00"
       step?: string
     }
   }
@@ -105,6 +107,8 @@ export async function listBrands(countryCode = 'US'): Promise<CRBrand[]> {
         logo_url: b.logo_url,
         logo_base_url: b.logo_base_url,
         categories: [cat.category],
+        min: b.min,
+        max: b.max,
       })
     }
   }
