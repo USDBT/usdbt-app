@@ -33,6 +33,7 @@ export function OrderForm({
 }) {
   const [resolvedProduct, setResolvedProduct] = useState(product)
   const [detailLoading, setDetailLoading] = useState(product.denominations.length === 0 && !product.range)
+  const [detailError, setDetailError] = useState(false)
   const [customValue, setCustomValue] = useState(product.range?.min ? String(product.range.min) : '')
   const [fixedInput, setFixedInput] = useState(product.denominations[0] ? String(product.denominations[0]) : '')
   const [email, setEmail] = useState(prefilledEmail ?? '')
@@ -52,12 +53,13 @@ export function OrderForm({
     fetchProductDetail(product.id)
       .then((detail) => {
         if (cancelled) return
+        if (detail.denominations.length === 0 && !detail.range) { setDetailError(true); return }
         const merged = { ...product, ...detail }
         setResolvedProduct(merged)
         if (detail.denominations.length > 0) setFixedInput(String(detail.denominations[0]))
         if (detail.range) setCustomValue(String(detail.range.min))
       })
-      .catch(() => {})
+      .catch(() => { if (!cancelled) setDetailError(true) })
       .finally(() => { if (!cancelled) setDetailLoading(false) })
     return () => { cancelled = true }
   }, [product])
@@ -75,7 +77,7 @@ export function OrderForm({
   const fixedValid = p.range ? true : sortedDenominations.length === 0 || sortedDenominations.includes(selectedValue)
   const hasEnoughBalance = usdcBalance === null ? true : usdcBalance >= selectedValue
 
-  const valid = !detailLoading && selectedValue > 0 && emailValid && inRange && fixedValid && hasEnoughBalance
+  const valid = !detailLoading && !detailError && selectedValue > 0 && emailValid && inRange && fixedValid && hasEnoughBalance
 
   useEffect(() => {
     let cancelled = false
@@ -270,20 +272,28 @@ export function OrderForm({
                   </button>
                 </div>
               ) : (
-                // No denomination data — free-entry fallback
-                <div className="flex items-stretch gap-2">
-                  <div className="flex-1 relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
-                    <input
-                      type="number"
-                      min={5}
-                      step={1}
-                      value={customValue}
-                      onChange={(e) => setCustomValue(e.target.value)}
-                      placeholder="Enter amount"
-                      className="w-full h-12 pl-7 pr-3 text-center text-base font-semibold border-2 border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
-                    />
-                  </div>
+                <div className="flex flex-col items-center gap-2 py-3">
+                  <p className="text-xs text-gray-400 text-center">Could not load product options.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetailError(false)
+                      setDetailLoading(true)
+                      fetchProductDetail(product.id)
+                        .then((detail) => {
+                          if (detail.denominations.length === 0 && !detail.range) { setDetailError(true); return }
+                          const merged = { ...product, ...detail }
+                          setResolvedProduct(merged)
+                          if (detail.denominations.length > 0) setFixedInput(String(detail.denominations[0]))
+                          if (detail.range) setCustomValue(String(detail.range.min))
+                        })
+                        .catch(() => setDetailError(true))
+                        .finally(() => setDetailLoading(false))
+                    }}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                  >
+                    Retry
+                  </button>
                 </div>
               )}
               {product.range && !inRange && selectedValue > 0 && (
