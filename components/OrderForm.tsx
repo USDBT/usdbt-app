@@ -153,8 +153,8 @@ function stepVariable(dir: 1 | -1) {
             src={p.image}
             alt=""
             aria-hidden
-            className="absolute inset-0 w-full h-full object-cover scale-150 blur-2xl"
-            style={{ filter: 'blur(24px)', transform: 'scale(1.6)' }}
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ filter: 'blur(12px)', transform: 'scale(1.4)' }}
           />
         )}
         {/* Tint overlay */}

@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import {
   ShoppingBag, ScrollText, Bookmark, Users, Grid2X2,
-  Settings, HelpCircle, Wallet, ChevronDown, ChevronRight, X,
+  Settings, HelpCircle, Wallet, ChevronDown, ChevronRight, ChevronLeft, X,
   Gift, Gamepad2, Tv, Plane, Utensils, ShoppingCart,
   ArrowDownToLine, Copy, Check, RefreshCw,
 } from 'lucide-react'
@@ -224,6 +224,7 @@ function SidebarContent({
   shopExpanded,
   onShopToggle,
   onSubCategorySelect,
+  collapsed = false,
 }: {
   active: View
   onNavigate: (v: View) => void
@@ -237,9 +238,10 @@ function SidebarContent({
   shopExpanded: boolean
   onShopToggle: () => void
   onSubCategorySelect?: (label: string) => void
+  collapsed?: boolean
 }) {
   function handleNavClick(id: View) {
-    if (id === 'shop') onShopToggle()
+    if (id === 'shop' && !collapsed) onShopToggle()
     onNavigate(id)
     if (id !== 'shop') onClose?.()
   }
@@ -247,12 +249,12 @@ function SidebarContent({
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center justify-between px-4 py-[18px] flex-shrink-0">
+      <div className={`flex items-center py-[18px] flex-shrink-0 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
         <div className="flex items-center gap-2.5">
           <Image src="/logo.png" alt="$USDBT" width={28} height={28} className="rounded-lg" />
-          <span className="font-semibold text-[15px] text-gray-900">$USDBT</span>
+          {!collapsed && <span className="font-semibold text-[15px] text-gray-900">$USDBT</span>}
         </div>
-        {onClose && (
+        {onClose && !collapsed && (
           <button onClick={onClose} className="md:hidden p-1 rounded-lg hover:bg-gray-100 text-gray-400">
             <X size={14} />
           </button>
@@ -266,15 +268,16 @@ function SidebarContent({
             <motion.button
               onClick={() => handleNavClick(id)}
               whileTap={{ scale: 0.97 }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
+              title={collapsed ? label : undefined}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${collapsed ? 'justify-center' : ''} ${
                 active === id
                   ? 'bg-[--color-brand-light] text-[--color-brand] border border-[rgba(43,43,245,0.3)] shadow-[inset_4px_4px_10px_rgba(43,43,245,0.12),inset_-4px_-4px_10px_rgba(43,43,245,0.12)]'
                   : 'text-gray-500 border border-transparent hover:bg-gray-50 hover:text-gray-800 hover:border-[rgba(43,43,245,0.15)] hover:shadow-[inset_4px_4px_10px_rgba(43,43,245,0.06),inset_-4px_-4px_10px_rgba(43,43,245,0.06)]'
               }`}
             >
               <Icon size={15} className={active === id ? 'text-[--color-brand]' : 'text-gray-400'} />
-              <span className="flex-1 text-left">{label}</span>
-              {id === 'shop' && (
+              {!collapsed && <span className="flex-1 text-left">{label}</span>}
+              {id === 'shop' && !collapsed && (
                 <motion.div
                   animate={{ rotate: shopExpanded ? 180 : 0 }}
                   transition={{ duration: 0.2 }}
@@ -288,7 +291,7 @@ function SidebarContent({
             </motion.button>
 
             <AnimatePresence initial={false}>
-              {id === 'shop' && shopExpanded && (
+              {id === 'shop' && shopExpanded && !collapsed && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
@@ -321,47 +324,59 @@ function SidebarContent({
         <motion.button
           onClick={() => { onSettingsClick?.(); onClose?.() }}
           whileTap={{ scale: 0.97 }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors"
+          title={collapsed ? 'Settings' : undefined}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors ${collapsed ? 'justify-center' : ''}`}
         >
           <Settings size={15} className="text-gray-400" />
-          Settings
+          {!collapsed && 'Settings'}
         </motion.button>
         <motion.button
           onClick={() => { onHelpClick?.(); onClose?.() }}
           whileTap={{ scale: 0.97 }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors"
+          title={collapsed ? 'Help' : undefined}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors ${collapsed ? 'justify-center' : ''}`}
         >
           <HelpCircle size={15} className="text-gray-400" />
-          Help
+          {!collapsed && 'Help'}
         </motion.button>
 
-        <div className="mt-3 rounded-xl bg-white border border-[rgba(43,43,245,0.25)] shadow-[inset_5px_5px_12px_rgba(43,43,245,0.08),inset_-5px_-5px_12px_rgba(43,43,245,0.08)] hover:border-[rgba(43,43,245,0.5)] hover:shadow-[inset_7px_7px_16px_rgba(43,43,245,0.16),inset_-7px_-7px_16px_rgba(43,43,245,0.16)] transition-all overflow-hidden">
-          <motion.button
+        {collapsed ? (
+          <button
             onClick={onBalanceClick}
-            whileTap={{ scale: 0.98 }}
-            className="w-full px-3 pt-3 pb-2 text-left"
+            title="Balance"
+            className="w-full mt-2 flex justify-center px-3 py-2 rounded-lg text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors"
           >
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <Wallet size={13} className="text-gray-400" />
-                <span className="text-[12px] font-medium text-gray-500">Balance</span>
-              </div>
-              <ChevronRight size={12} className="text-gray-400" />
-            </div>
-            <p className={`text-[11px] mt-0.5 ${balanceLoading ? 'text-gray-300 animate-pulse' : 'text-gray-400'}`}>
-              {balance ? `${balance.usdc} USDC` : '— USDC'}
-            </p>
-          </motion.button>
-          <div className="px-3 pb-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); onReloadBalance?.() }}
-              className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-[#2b2bf5] transition-colors"
+            <Wallet size={15} className="text-gray-400" />
+          </button>
+        ) : (
+          <div className="mt-3 rounded-xl bg-white border border-[rgba(43,43,245,0.25)] shadow-[inset_5px_5px_12px_rgba(43,43,245,0.08),inset_-5px_-5px_12px_rgba(43,43,245,0.08)] hover:border-[rgba(43,43,245,0.5)] hover:shadow-[inset_7px_7px_16px_rgba(43,43,245,0.16),inset_-7px_-7px_16px_rgba(43,43,245,0.16)] transition-all overflow-hidden">
+            <motion.button
+              onClick={onBalanceClick}
+              whileTap={{ scale: 0.98 }}
+              className="w-full px-3 pt-3 pb-2 text-left"
             >
-              <RefreshCw size={10} className={balanceLoading ? 'animate-spin' : ''} />
-              Refresh
-            </button>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Wallet size={13} className="text-gray-400" />
+                  <span className="text-[12px] font-medium text-gray-500">Balance</span>
+                </div>
+                <ChevronRight size={12} className="text-gray-400" />
+              </div>
+              <p className={`text-[11px] mt-0.5 ${balanceLoading ? 'text-gray-300 animate-pulse' : 'text-gray-400'}`}>
+                {balance ? `${balance.usdc} USDC` : '— USDC'}
+              </p>
+            </motion.button>
+            <div className="px-3 pb-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); onReloadBalance?.() }}
+                className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-[#2b2bf5] transition-colors"
+              >
+                <RefreshCw size={10} className={balanceLoading ? 'animate-spin' : ''} />
+                Refresh
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
@@ -386,6 +401,7 @@ export function Sidebar({
 }) {
   const [shopExpanded, setShopExpanded] = useState(false)
   const [balanceOpen, setBalanceOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const { address, isConnected } = useAccount()
   const { balance, loading: balanceLoading, reload: reloadBalance } = useWalletBalance(isConnected ? address : undefined)
 
@@ -407,11 +423,22 @@ export function Sidebar({
       <BalanceDrawer open={balanceOpen} onClose={() => setBalanceOpen(false)} balance={balance} loading={balanceLoading} onReload={reloadBalance} />
 
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-[190px] flex-shrink-0 bg-white border-r border-gray-100 h-full">
+      <aside
+        className={`relative hidden md:flex flex-col flex-shrink-0 bg-white border-r border-gray-100 h-full transition-[width] duration-200 ${collapsed ? 'w-[68px]' : 'w-[190px]'}`}
+      >
         <SidebarContent
           {...sharedProps}
+          collapsed={collapsed}
           onBalanceClick={() => setBalanceOpen(true)}
         />
+        {/* Collapse toggle on the right border */}
+        <button
+          onClick={() => setCollapsed((c) => !c)}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className="absolute top-1/2 -right-3 -translate-y-1/2 z-10 w-6 h-6 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:text-[#2b2bf5] hover:border-[#2b2bf5] transition-colors"
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
       </aside>
 
       {/* Mobile bottom sheet */}
