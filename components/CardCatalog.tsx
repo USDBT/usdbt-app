@@ -4,25 +4,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2, MoreHorizontal, LayoutGrid, List, Bookmark } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { fetchProducts, priceLabel, titleize, type Product } from '@/lib/api'
+import { labelForCategory } from '@/lib/categories'
 
-const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  'gaming':    ['game', 'gaming', 'steam', 'xbox', 'playstation', 'nintendo', 'roblox', 'blizzard', 'battle'],
-  'streaming': ['netflix', 'hulu', 'disney', 'hbo', 'spotify', 'youtube', 'twitch', 'deezer', 'apple music', 'prime'],
-  'travel':    ['airbnb', 'uber', 'expedia', 'booking', 'hotel', 'airline', 'flight', 'lyft'],
-  'food':      ['doordash', 'grubhub', 'starbucks', 'mcdonald', 'domino', 'pizza', 'dining', 'ubereats', 'seamless', 'chipotle'],
-  'shopping':  ['amazon', 'walmart', 'target', 'ebay', 'bestbuy', 'clothing', 'fashion', 'nordstrom', 'shein'],
-}
-
-function productMatchesCategory(p: Product, cat: string | null | undefined): boolean {
-  if (!cat || cat === 'Gift Cards') return true
-  const lower = cat.toLowerCase()
-  const haystack = [
-    p.name.toLowerCase(),
-    ...(p.categories ?? []).map((c) => c.toLowerCase()),
-    (p.type ?? '').toLowerCase(),
-  ].join(' ')
-  if (haystack.includes(lower)) return true
-  return (CATEGORY_KEYWORDS[lower] ?? []).some((kw) => haystack.includes(kw))
+function productMatchesCategory(p: Product, slug: string | null | undefined): boolean {
+  if (!slug) return true
+  const target = slug.toLowerCase()
+  return (p.categories ?? []).some((c) => c.toLowerCase() === target)
 }
 
 const FEATURED = ['Amazon', 'Netflix', 'Steam', 'Google Play']
@@ -84,19 +71,24 @@ function buildImageSrcs(product: Product): string[] {
 
 function ProductThumb({ product, className }: { product: Product; className?: string }) {
   const [attempt, setAttempt] = useState(0)
+  const [loaded, setLoaded] = useState(false)
   const srcs = buildImageSrcs(product)
   const src = srcs[attempt]
 
   return (
-    <div className={className}>
+    <div className={`relative ${className ?? ''}`}>
       {src && attempt < srcs.length ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={src}
-          alt={product.name}
-          className="w-full h-full object-contain p-1.5"
-          onError={() => setAttempt((a) => a + 1)}
-        />
+        <>
+          {!loaded && <div className="absolute inset-0 rounded-[inherit] bg-gray-100 animate-pulse" />}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={product.name}
+            className={`w-full h-full object-contain p-1.5 transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+            onLoad={() => setLoaded(true)}
+            onError={() => { setLoaded(false); setAttempt((a) => a + 1) }}
+          />
+        </>
       ) : (
         <div
           className="w-full h-full flex items-center justify-center rounded-[inherit] text-white font-bold text-sm select-none"
@@ -300,7 +292,7 @@ export function CardCatalog({
           <div className="flex items-center gap-1 text-sm">
             <span className="text-gray-400">All Cards</span>
             <span className="text-gray-300 mx-1">/</span>
-            <span className="font-medium text-gray-700">{categoryFilter || 'Gift Cards'}</span>
+            <span className="font-medium text-gray-700">{categoryFilter ? labelForCategory(categoryFilter) : 'Gift Cards'}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center gap-1 mr-1">
@@ -351,7 +343,7 @@ export function CardCatalog({
               </tr>
             </thead>
             <tbody>
-              {paged.map((p) => {
+              {visible.map((p) => {
                 const isSaved = savedIds?.has(p.id) ?? false
                 return (
                   <tr

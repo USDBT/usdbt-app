@@ -21,28 +21,13 @@ import { SettingsDrawer } from '@/components/SettingsDrawer'
 import { HelpDrawer } from '@/components/HelpDrawer'
 import { EmailCaptureModal } from '@/components/EmailCaptureModal'
 import { fetchProducts, getOrderProgress, type Product, type OrderProgress } from '@/lib/api'
+import { deriveCategories } from '@/lib/categories'
 import { useAuth } from '@/hooks/useAuth'
 import { getStoredEmail, storeEmail, clearToken, getValidToken } from '@/lib/auth'
 import { getSavedCards, toggleSavedCard } from '@/lib/savedCards'
 
 type Step = 'catalog' | 'configure' | 'payment' | 'success'
 
-const CATEGORY_DEFS = [
-  { label: 'Gift Cards',  icon: Gift,         keywords: [] as string[] },
-  { label: 'Gaming',      icon: Gamepad2,     keywords: ['game', 'gaming', 'steam', 'xbox', 'playstation', 'nintendo', 'roblox', 'blizzard', 'battle'] },
-  { label: 'Streaming',   icon: Tv,           keywords: ['netflix', 'hulu', 'disney', 'hbo', 'spotify', 'youtube', 'twitch', 'deezer', 'apple music', 'prime'] },
-  { label: 'Travel',      icon: Plane,        keywords: ['airbnb', 'uber', 'expedia', 'booking', 'hotel', 'airline', 'flight', 'lyft'] },
-  { label: 'Food',        icon: Utensils,     keywords: ['doordash', 'grubhub', 'starbucks', 'mcdonald', 'domino', 'pizza', 'dining', 'ubereats', 'seamless', 'chipotle'] },
-  { label: 'Shopping',    icon: ShoppingCart, keywords: ['amazon', 'walmart', 'target', 'ebay', 'bestbuy', 'clothing', 'fashion', 'nordstrom', 'shein'] },
-]
-
-function countForCategory(label: string, keywords: string[], products: Product[]): number {
-  if (label === 'Gift Cards') return products.length
-  return products.filter((p) => {
-    const haystack = [p.name, ...(p.categories ?? []), p.type ?? ''].join(' ').toLowerCase()
-    return haystack.includes(label.toLowerCase()) || keywords.some((kw) => haystack.includes(kw))
-  }).length
-}
 
 function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
   return (
@@ -97,31 +82,45 @@ function CategoriesView({
   products,
 }: {
   onNavigate: (v: View) => void
-  onSubCategorySelect: (label: string) => void
+  onSubCategorySelect: (slug: string | null) => void
   products: Product[]
 }) {
+  const categories = deriveCategories(products)
+
   return (
     <div className="px-5 py-5">
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-4">
         <h2 className="text-sm font-semibold text-gray-800 mb-4">Browse by Category</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {CATEGORY_DEFS.map(({ label, icon: Icon, keywords }) => {
-            const count = countForCategory(label, keywords, products)
-            return (
+        {categories.length === 0 ? (
+          <p className="text-xs text-gray-400">Loading categories…</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {/* All */}
+            <button
+              onClick={() => { onSubCategorySelect(null); onNavigate('shop') }}
+              className="flex flex-col items-start p-4 rounded-xl border border-[rgba(43,43,245,0.3)] bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.18),inset_-5px_-5px_12px_rgba(43,43,245,0.18)] hover:border-[rgba(43,43,245,0.6)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.32),inset_-7px_-7px_18px_rgba(43,43,245,0.32)] transition-all text-left"
+            >
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: '#eef0ff' }}>
+                <Grid2X2 size={18} style={{ color: '#2b2bf5' }} />
+              </div>
+              <p className="text-sm font-medium text-gray-800">All Cards</p>
+              <p className="text-xs text-gray-400 mt-0.5">{products.length} cards</p>
+            </button>
+            {categories.map(({ slug, label, icon: Icon, count }) => (
               <button
-                key={label}
-                onClick={() => { onSubCategorySelect(label); onNavigate('shop') }}
+                key={slug}
+                onClick={() => { onSubCategorySelect(slug); onNavigate('shop') }}
                 className="flex flex-col items-start p-4 rounded-xl border border-[rgba(43,43,245,0.3)] bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.18),inset_-5px_-5px_12px_rgba(43,43,245,0.18)] hover:border-[rgba(43,43,245,0.6)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.32),inset_-7px_-7px_18px_rgba(43,43,245,0.32)] transition-all text-left"
               >
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: '#eef0ff' }}>
                   <Icon size={18} style={{ color: '#2b2bf5' }} />
                 </div>
                 <p className="text-sm font-medium text-gray-800">{label}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{count > 0 ? `${count} cards` : '…'}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{count} cards</p>
               </button>
-            )
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -604,8 +603,8 @@ export default function Home() {
     }
   }
 
-  function handleSubCategorySelect(label: string) {
-    setCategoryFilter(label === 'Gift Cards' ? null : label)
+  function handleSubCategorySelect(slug: string | null) {
+    setCategoryFilter(slug)
   }
 
   function handleNavigate(v: View) {
@@ -661,6 +660,7 @@ export default function Home() {
           onSettingsClick={() => setSettingsOpen(true)}
           onHelpClick={() => setHelpOpen(true)}
           onSubCategorySelect={handleSubCategorySelect}
+          categories={deriveCategories(allProducts)}
         />
 
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">

@@ -2,14 +2,14 @@
 
 import Image from 'next/image'
 import {
-  ShoppingBag, ScrollText, Bookmark, Users, Grid2X2,
+  ShoppingBag, ScrollText, Bookmark, Users, Grid2X2, LayoutGrid,
   Settings, HelpCircle, Wallet, ChevronDown, ChevronRight, ChevronLeft, X,
-  Gift, Gamepad2, Tv, Plane, Utensils, ShoppingCart,
   ArrowDownToLine, Copy, Check, RefreshCw,
 } from 'lucide-react'
 import { useState, useCallback, useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import { getWalletBalances } from '@/lib/api'
+import type { DerivedCategory } from '@/lib/categories'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -25,15 +25,6 @@ const NAV: { id: View; label: string; icon: React.ElementType }[] = [
   { id: 'saved',      label: 'Saved',      icon: Bookmark    },
   { id: 'refer',      label: 'Refer',      icon: Users       },
   { id: 'categories', label: 'Categories', icon: Grid2X2     },
-]
-
-const SHOP_SUBS = [
-  { label: 'Gift Cards', icon: Gift },
-  { label: 'Gaming',     icon: Gamepad2 },
-  { label: 'Streaming',  icon: Tv },
-  { label: 'Travel',     icon: Plane },
-  { label: 'Food',       icon: Utensils },
-  { label: 'Shopping',   icon: ShoppingCart },
 ]
 
 type Balance = { usdc: string; usdbt: string }
@@ -224,6 +215,7 @@ function SidebarContent({
   shopExpanded,
   onShopToggle,
   onSubCategorySelect,
+  categories = [],
   collapsed = false,
 }: {
   active: View
@@ -237,7 +229,8 @@ function SidebarContent({
   balanceLoading: boolean
   shopExpanded: boolean
   onShopToggle: () => void
-  onSubCategorySelect?: (label: string) => void
+  onSubCategorySelect?: (slug: string | null) => void
+  categories?: DerivedCategory[]
   collapsed?: boolean
 }) {
   function handleNavClick(id: View) {
@@ -299,16 +292,24 @@ function SidebarContent({
                   transition={{ duration: 0.2, ease: 'easeInOut' }}
                   className="overflow-hidden ml-4 mt-0.5"
                 >
-                  <div className="space-y-0.5 pb-1">
-                    {SHOP_SUBS.map(({ label: sub, icon: SubIcon }) => (
+                  <div className="space-y-0.5 pb-1 max-h-64 overflow-y-auto">
+                    <motion.button
+                      onClick={() => { onSubCategorySelect?.(null); onNavigate('shop'); onClose?.() }}
+                      whileTap={{ scale: 0.96 }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-gray-500 border border-transparent hover:border-[rgba(43,43,245,0.2)] hover:shadow-[inset_3px_3px_8px_rgba(43,43,245,0.08),inset_-3px_-3px_8px_rgba(43,43,245,0.08)] hover:text-gray-700 transition-all"
+                    >
+                      <LayoutGrid size={12} className="text-gray-400 flex-shrink-0" />
+                      All Cards
+                    </motion.button>
+                    {categories.map(({ slug, label, icon: SubIcon }) => (
                       <motion.button
-                        key={sub}
-                        onClick={() => { onSubCategorySelect?.(sub); onNavigate('shop'); onClose?.() }}
+                        key={slug}
+                        onClick={() => { onSubCategorySelect?.(slug); onNavigate('shop'); onClose?.() }}
                         whileTap={{ scale: 0.96 }}
                         className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-gray-500 border border-transparent hover:border-[rgba(43,43,245,0.2)] hover:shadow-[inset_3px_3px_8px_rgba(43,43,245,0.08),inset_-3px_-3px_8px_rgba(43,43,245,0.08)] hover:text-gray-700 transition-all"
                       >
                         <SubIcon size={12} className="text-gray-400 flex-shrink-0" />
-                        {sub}
+                        {label}
                       </motion.button>
                     ))}
                   </div>
@@ -390,6 +391,7 @@ export function Sidebar({
   onSettingsClick,
   onHelpClick,
   onSubCategorySelect,
+  categories = [],
 }: {
   active: View
   onNavigate: (v: View) => void
@@ -397,7 +399,8 @@ export function Sidebar({
   onMobileClose?: () => void
   onSettingsClick?: () => void
   onHelpClick?: () => void
-  onSubCategorySelect?: (label: string) => void
+  onSubCategorySelect?: (slug: string | null) => void
+  categories?: DerivedCategory[]
 }) {
   const [shopExpanded, setShopExpanded] = useState(false)
   const [balanceOpen, setBalanceOpen] = useState(false)
@@ -413,6 +416,7 @@ export function Sidebar({
     shopExpanded,
     onShopToggle: () => setShopExpanded((e) => !e),
     onSubCategorySelect,
+    categories,
     balance,
     balanceLoading,
     onReloadBalance: reloadBalance,
