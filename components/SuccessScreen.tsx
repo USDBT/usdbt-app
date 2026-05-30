@@ -110,7 +110,8 @@ export function SuccessScreen({
 
         <button
           onClick={onReset}
-          className="w-full py-2.5 rounded-xl bg-[--color-brand] text-white text-xs font-semibold hover:bg-[--color-brand-hover] transition-colors"
+          className="w-full py-2.5 rounded-xl text-white text-xs font-semibold transition-colors"
+          style={{ backgroundColor: '#2b2bf5' }}
         >
           Buy another card
         </button>
