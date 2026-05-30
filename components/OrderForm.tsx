@@ -7,7 +7,7 @@ import {
   Tag, FolderOpen, Globe, Zap, ShieldCheck,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { createOrder, getWalletBalances, priceLabel, titleize, type Product } from '@/lib/api'
+import { createOrder, fetchProductDetail, getWalletBalances, priceLabel, titleize, type Product } from '@/lib/api'
 
 function SectionLabel({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
   return (
@@ -31,6 +31,8 @@ export function OrderForm({
   onClose: () => void
   onOrder: (orderId: string, paymentAddress: string, email: string) => void
 }) {
+  const [resolvedProduct, setResolvedProduct] = useState(product)
+  const [detailLoading, setDetailLoading] = useState(product.denominations.length === 0 && !product.range)
   const [customValue, setCustomValue] = useState(product.range?.min ? String(product.range.min) : '')
   const [fixedInput, setFixedInput] = useState(product.denominations[0] ? String(product.denominations[0]) : '')
   const [email, setEmail] = useState(prefilledEmail ?? '')
@@ -42,22 +44,38 @@ export function OrderForm({
   const [error, setError] = useState<string | null>(null)
   const [showUsdbtModal, setShowUsdbtModal] = useState(false)
 
-  const currency = 'USDC'
-  const feeRate = 0.04
+  // Fetch real denominations from CR if not already loaded
+  useEffect(() => {
+    if (product.denominations.length > 0 || product.range) return
+    let cancelled = false
+    setDetailLoading(true)
+    fetchProductDetail(product.id)
+      .then((detail) => {
+        if (cancelled) return
+        const merged = { ...product, ...detail }
+        setResolvedProduct(merged)
+        if (detail.denominations.length > 0) setFixedInput(String(detail.denominations[0]))
+        if (detail.range) setCustomValue(String(detail.range.min))
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setDetailLoading(false) })
+    return () => { cancelled = true }
+  }, [product])
+
+  const p = resolvedProduct
+
   const sortedDenominations = useMemo(
-    () => [...product.denominations].filter((n) => Number.isFinite(n)).sort((a, b) => a - b),
-    [product.denominations],
+    () => [...p.denominations].filter((n) => Number.isFinite(n)).sort((a, b) => a - b),
+    [p.denominations],
   )
 
-  const selectedValue = product.range ? parseFloat(customValue) || 0 : parseFloat(fixedInput) || 0
-  const fee = parseFloat((selectedValue * feeRate).toFixed(2))
-  const total = parseFloat((selectedValue + fee).toFixed(2))
-  const inRange = product.range ? selectedValue >= product.range.min && selectedValue <= product.range.max : true
+  const selectedValue = p.range ? parseFloat(customValue) || 0 : parseFloat(fixedInput) || 0
+  const inRange = p.range ? selectedValue >= p.range.min && selectedValue <= p.range.max : true
   const emailValid = email.includes('@')
-  const fixedValid = product.range ? true : sortedDenominations.includes(selectedValue)
-  const hasEnoughBalance = usdcBalance === null ? true : usdcBalance >= total
+  const fixedValid = p.range ? true : sortedDenominations.length === 0 || sortedDenominations.includes(selectedValue)
+  const hasEnoughBalance = usdcBalance === null ? true : usdcBalance >= selectedValue
 
-  const valid = selectedValue > 0 && emailValid && inRange && fixedValid && hasEnoughBalance
+  const valid = !detailLoading && selectedValue > 0 && emailValid && inRange && fixedValid && hasEnoughBalance
 
   useEffect(() => {
     let cancelled = false
@@ -87,10 +105,10 @@ export function OrderForm({
   }
 
   function stepVariable(dir: 1 | -1) {
-    if (!product.range) return
-    const step = product.range.step || 1
-    const next = Math.max(product.range.min, Math.min(product.range.max,
-      (parseFloat(customValue) || product.range.min) + step * dir,
+    if (!p.range) return
+    const step = p.range.step || 1
+    const next = Math.max(p.range.min, Math.min(p.range.max,
+      (parseFloat(customValue) || p.range.min) + step * dir,
     ))
     setCustomValue(String(Number(next.toFixed(2))))
   }
@@ -100,7 +118,17 @@ export function OrderForm({
     setLoading(true)
     setError(null)
     try {
-      const order = await createOrder({ productId: product.id, value: selectedValue, email, walletAddress, currency })
+      const isRange = !!p.range
+      const order = await createOrder({
+        brandName: p.name,
+        familyName: p.id,
+        countryCode: p.countryCode || 'US',
+        denomination: isRange ? 'range' : String(selectedValue),
+        productValue: isRange ? selectedValue : undefined,
+        faceValue: selectedValue,
+        email,
+        walletAddress,
+      })
       onOrder(order.orderId, order.paymentAddress, email)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'something went wrong')
@@ -110,10 +138,10 @@ export function OrderForm({
   }
 
   const DETAILS = [
-    { icon: Tag,        label: 'Type',     value: titleize(product.type || 'gift_card') },
-    { icon: FolderOpen, label: 'Category', value: titleize(product.categories?.[0] || 'gift_card') },
-    { icon: Globe,      label: 'Country',  value: product.country || '—' },
-    { icon: DollarSign, label: 'Currency', value: product.currency || '—' },
+    { icon: Tag,        label: 'Type',     value: titleize(p.type || 'gift_card') },
+    { icon: FolderOpen, label: 'Category', value: titleize(p.categories?.[0] || 'gift_card') },
+    { icon: Globe,      label: 'Country',  value: p.country || '—' },
+    { icon: DollarSign, label: 'Currency', value: p.currency || 'USD' },
     { icon: Zap,        label: 'Delivery', value: 'Email · Instant' },
     { icon: ShieldCheck,label: 'KYC',      value: 'None required' },
   ]
@@ -124,20 +152,20 @@ export function OrderForm({
       <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex-shrink-0">
         <div className="flex items-start justify-between mb-4">
           <div className="w-10 h-10 rounded-xl bg-[--color-brand-light] flex items-center justify-center overflow-hidden flex-shrink-0">
-            {product.image ? (
+            {p.image ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={product.image} alt="" className="w-full h-full object-contain p-1"
+              <img src={p.image} alt="" className="w-full h-full object-contain p-1"
                 onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
             ) : (
-              <span className="text-[--color-brand] font-bold text-lg">{product.name[0]}</span>
+              <span className="text-[--color-brand] font-bold text-lg">{p.name[0]}</span>
             )}
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400">
             <X size={15} />
           </button>
         </div>
-        <h2 className="text-lg font-semibold text-gray-900 leading-tight">{product.name}</h2>
-        <p className="text-xs text-gray-400 mt-0.5">Gift Card · {priceLabel(product)}</p>
+        <h2 className="text-lg font-semibold text-gray-900 leading-tight">{p.name}</h2>
+        <p className="text-xs text-gray-400 mt-0.5">Gift Card · {detailLoading ? 'Loading…' : priceLabel(p)}</p>
       </div>
 
       {/* Tabs */}
@@ -164,7 +192,11 @@ export function OrderForm({
             {/* Amount */}
             <div>
               <SectionLabel icon={DollarSign} text="Amount" />
-              {product.denominations.length > 0 ? (
+              {detailLoading ? (
+                <div className="flex items-center justify-center h-12">
+                  <div className="w-5 h-5 rounded-full border-2 border-[#2b2bf5] border-t-transparent animate-spin" />
+                </div>
+              ) : p.denominations.length > 0 ? (
                 <div className="flex items-stretch gap-2">
                   <button
                     type="button"
@@ -187,7 +219,7 @@ export function OrderForm({
                     <Plus size={16} />
                   </button>
                 </div>
-              ) : product.range ? (
+              ) : p.range ? (
                 <div className="flex items-stretch gap-2">
                   <button
                     type="button"
@@ -200,12 +232,12 @@ export function OrderForm({
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">$</span>
                     <input
                       type="number"
-                      min={product.range.min}
-                      max={product.range.max}
-                      step={product.range.step}
+                      min={p.range.min}
+                      max={p.range.max}
+                      step={p.range.step}
                       value={customValue}
                       onChange={(e) => setCustomValue(e.target.value)}
-                      placeholder={String(product.range.min)}
+                      placeholder={String(p.range.min)}
                       className="w-full h-12 pl-7 pr-3 text-center text-base font-semibold border-2 border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
                     />
                   </div>
@@ -220,10 +252,10 @@ export function OrderForm({
               ) : null}
               {product.range && !inRange && selectedValue > 0 && (
                 <p className="text-xs text-red-500 mt-2">
-                  Amount must be ${product.range.min}–${product.range.max}
+                  Amount must be ${p.range?.min}–${p.range?.max}
                 </p>
               )}
-              {!product.range && !fixedValid && selectedValue > 0 && (
+              {!p.range && !fixedValid && selectedValue > 0 && (
                 <p className="text-xs text-red-500 mt-2">Not a valid denomination for this card.</p>
               )}
             </div>
@@ -290,17 +322,14 @@ export function OrderForm({
               )}
             </div>
 
-            {/* Fee breakdown */}
+            {/* Price summary */}
             {selectedValue > 0 && (
               <div className="space-y-2.5">
                 <div className="flex justify-between text-sm text-gray-500">
                   <span>Card value</span><span>${selectedValue}</span>
                 </div>
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>Service fee (4%)</span><span>${fee}</span>
-                </div>
                 <div className="border-t border-gray-100 pt-2.5 flex justify-between text-sm font-semibold text-gray-800">
-                  <span>You send</span><span>${total} USDC</span>
+                  <span>Exact USDC amount</span><span className="text-gray-400 text-xs font-normal">shown at payment</span>
                 </div>
                 <div className={`text-xs ${hasEnoughBalance ? 'text-emerald-600' : 'text-red-500'}`}>
                   {balancesLoading

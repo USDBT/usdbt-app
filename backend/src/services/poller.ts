@@ -1,82 +1,89 @@
-import { sql, requiredEnv } from '../lib/db'
-import { findIncomingTransfer, currentBlock } from '../lib/chain'
-import { fulfillOrder } from './fulfillment'
+import { sql } from '../lib/db'
+import { getCROrder } from '../lib/cryptorefills'
 import { ORDER_STATUS } from '../lib/order-status'
-import type { Address } from 'viem'
 
-const USDC_ADDRESS = (process.env.USDC_TOKEN_ADDRESS ?? '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913') as Address
-const PAYMENT_WALLET = requiredEnv('PAYMENT_WALLET_ADDRESS') as Address
-const USDC_DECIMALS = 6
-const LOOK_BACK_BLOCKS = 300n
+const POLL_INTERVAL_MS = 15_000
 
-export function startPoller(intervalMs = 15_000): void {
-  console.log('[poller] started — checking every', intervalMs / 1000, 's')
-  setInterval(checkPendingOrders, intervalMs)
+// Map Cryptorefills order statuses to our internal statuses
+function mapCRStatus(crStatus: string): string | null {
+  switch (crStatus) {
+    case 'Created':
+    case 'WaitingForPayment':
+    case 'PartialPaymentStarted':
+      return ORDER_STATUS.PENDING_PAYMENT
+    case 'PaymentStarted':
+      return ORDER_STATUS.USER_DEBITED
+    case 'PaymentReceived':
+      return ORDER_STATUS.HOT_WALLET_FUNDED
+    case 'WaitingForDelivery':
+    case 'WaitingForManualAction':
+      return ORDER_STATUS.BITREFILL_PROCESSING
+    case 'Done':
+      return ORDER_STATUS.DELIVERED
+    case 'Expired':
+    case 'PaymentFailed':
+    case 'PaymentSetupFailed':
+      return ORDER_STATUS.FAILED
+    case 'Refunded':
+      return ORDER_STATUS.REFUNDED
+    default:
+      return null  // unknown status — leave unchanged
+  }
 }
 
-async function checkPendingOrders(): Promise<void> {
-  const now = new Date()
+const TERMINAL = new Set<string>([
+  ORDER_STATUS.DELIVERED,
+  ORDER_STATUS.FAILED,
+  ORDER_STATUS.REFUNDED,
+])
 
-  const pending = await sql`
-    SELECT id, wallet_address, payment_amount, expires_at
+export function startPoller(intervalMs = POLL_INTERVAL_MS): void {
+  console.log('[poller] started — checking every', intervalMs / 1000, 's')
+  setInterval(pollActiveOrders, intervalMs)
+}
+
+async function pollActiveOrders(): Promise<void> {
+  const active = await sql`
+    SELECT id, cr_order_id, status, expires_at
     FROM orders
-    WHERE status = ${ORDER_STATUS.PENDING_PAYMENT}
+    WHERE cr_order_id IS NOT NULL
+      AND status NOT IN (
+        ${ORDER_STATUS.DELIVERED},
+        ${ORDER_STATUS.FAILED},
+        ${ORDER_STATUS.REFUNDED}
+      )
   `
-  if (pending.length === 0) return
-
-  const active = pending.filter((d) => new Date(d.expires_at) > now)
-  const expired = pending.filter((d) => new Date(d.expires_at) <= now)
-
-  for (const order of expired) {
-    try {
-      await sql`
-        UPDATE orders SET status = ${ORDER_STATUS.FAILED}, failure_reason = 'payment window expired'
-        WHERE id = ${order.id}
-      `
-      console.log(`[poller] expired order ${order.id}`)
-    } catch (err) {
-      console.error(`[poller] failed to expire order ${order.id}:`, err)
-    }
-  }
-
   if (active.length === 0) return
 
-  let latestBlock: bigint
-  try {
-    latestBlock = await currentBlock()
-  } catch (err) {
-    console.error('[poller] failed to get block number:', err)
-    return
-  }
-
-  const fromBlock = latestBlock > LOOK_BACK_BLOCKS ? latestBlock - LOOK_BACK_BLOCKS : 0n
+  const now = new Date()
 
   for (const order of active) {
     try {
-      await checkOrder(order, fromBlock)
+      // Mark expired orders that CR hasn't seen yet (no cr_order_id response)
+      if (new Date(order.expires_at) <= now && order.status === ORDER_STATUS.PENDING_PAYMENT) {
+        await sql`
+          UPDATE orders SET status = ${ORDER_STATUS.FAILED}, failure_reason = 'payment window expired'
+          WHERE id = ${order.id}
+        `
+        console.log(`[poller] expired order ${order.id}`)
+        continue
+      }
+
+      const crOrder = await getCROrder(order.cr_order_id)
+      const newStatus = mapCRStatus(crOrder.status)
+
+      if (!newStatus || newStatus === order.status) continue
+
+      await sql`
+        UPDATE orders SET status = ${newStatus}
+        WHERE id = ${order.id}
+      `
+
+      if (TERMINAL.has(newStatus)) {
+        console.log(`[poller] order ${order.id} → ${newStatus} (CR: ${crOrder.status})`)
+      }
     } catch (err) {
       console.error(`[poller] error checking order ${order.id}:`, err)
     }
   }
-}
-
-async function checkOrder(order: any, fromBlock: bigint): Promise<void> {
-  const match = await findIncomingTransfer({
-    tokenAddress: USDC_ADDRESS,
-    from: order.wallet_address as Address,
-    to: PAYMENT_WALLET,
-    expectedAmountHuman: order.payment_amount,
-    decimals: USDC_DECIMALS,
-    fromBlock,
-  })
-
-  if (!match) return
-
-  console.log(`[poller] payment detected for order ${order.id} — tx ${match.txHash}`)
-
-  await sql`
-    UPDATE orders SET tx_hash = ${match.txHash}, status = ${ORDER_STATUS.USER_DEBITED}
-    WHERE id = ${order.id}
-  `
-  await fulfillOrder(order.id)
 }

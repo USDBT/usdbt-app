@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server'
 import { env } from '@/lib/env'
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const page = searchParams.get('page') ?? '0'
-  const res = await fetch(`${env.backendUrl}/products?page=${page}`)
+export async function GET() {
+  const res = await fetch(`${env.backendUrl}/products`)
   const data = await res.json()
   return NextResponse.json(data, { status: res.status })
 }

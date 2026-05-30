@@ -1,54 +1,79 @@
 import { Router } from 'express'
-import { sql, requiredEnv } from '../lib/db'
-import { getProduct } from '../lib/bitrefill'
+import { sql } from '../lib/db'
+import { validateOrder, createCROrder, requiredEnv } from '../lib/cryptorefills'
 import { ORDER_STATUS } from '../lib/order-status'
-import { getOrderProgress } from '../lib/order-progress'
 import { isAddress } from 'viem'
 
 export const ordersRouter = Router()
 
-const PAYMENT_ADDRESS = requiredEnv('PAYMENT_WALLET_ADDRESS')
 const ORDER_TTL_MINUTES = 30
 
 ordersRouter.post('/', async (req, res) => {
-  const { productId, value, email, walletAddress, currency = 'USDC' } = req.body
+  const {
+    brandName, familyName, countryCode = 'US',
+    denomination, productValue,
+    faceValue, email, walletAddress,
+  } = req.body
 
-  if (!productId || !value || !email || !walletAddress) {
-    return res.status(400).json({ error: 'productId, value, email, and walletAddress are required' })
+  if (!brandName || !familyName || !denomination || !faceValue || !email || !walletAddress) {
+    return res.status(400).json({ error: 'brandName, familyName, denomination, faceValue, email, and walletAddress are required' })
   }
   if (!isAddress(walletAddress)) {
     return res.status(400).json({ error: 'invalid walletAddress' })
   }
-  if (!['USDC', 'USDBT'].includes(currency)) {
-    return res.status(400).json({ error: 'currency must be USDC or USDBT' })
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'invalid email' })
   }
 
-  let product
+  const userIp = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ?? '127.0.0.1'
+  const userAgent = req.headers['user-agent'] ?? 'usdbt-backend/1.0'
+
+  const crInput = { brandName, countryCode, denomination, productValue, email, userIp, userAgent }
+
+  // Validate with CR before creating
+  let validation: { ok: boolean; problems: any[] }
   try {
-    product = await getProduct(productId)
-  } catch {
-    return res.status(404).json({ error: 'product not found' })
+    validation = await validateOrder(crInput)
+  } catch (err) {
+    console.error('[orders] validation request failed:', err)
+    return res.status(502).json({ error: 'could not validate order' })
+  }
+  if (!validation.ok) {
+    const first = validation.problems[0]
+    return res.status(422).json({ error: first.problem ?? 'order validation failed', problems: validation.problems })
   }
 
-  const feeRate = currency === 'USDBT' ? 0.02 : 0.04
-  const paymentAmount = parseFloat((value * (1 + feeRate)).toFixed(6))
-  const expiresAt = new Date(Date.now() + ORDER_TTL_MINUTES * 60 * 1000)
+  // Create order with Cryptorefills
+  let crOrder
+  try {
+    crOrder = await createCROrder(crInput)
+  } catch (err) {
+    console.error('[orders] CR order creation failed:', err)
+    return res.status(502).json({ error: 'failed to create order with provider' })
+  }
+
+  const coinAmount = Number(crOrder.coin_amount)
+  const expiresAt = crOrder.expires_at
+    ? new Date(crOrder.expires_at)
+    : new Date(Date.now() + ORDER_TTL_MINUTES * 60 * 1000)
 
   const [order] = await sql`
     INSERT INTO orders
       (wallet_address, email, card_type, brand_id, brand_name, face_value,
-       payment_currency, payment_amount, fee_rate, status, expires_at)
+       payment_currency, payment_amount, fee_rate, status, expires_at,
+       cr_order_id, payment_address, coin_amount)
     VALUES
-      (${walletAddress}, ${email}, 'gift_card', ${product.id}, ${product.name}, ${value},
-       ${currency}, ${paymentAmount}, ${feeRate}, ${ORDER_STATUS.PENDING_PAYMENT}, ${expiresAt})
-    RETURNING id, expires_at
+      (${walletAddress}, ${email}, 'gift_card', ${familyName}, ${brandName}, ${faceValue},
+       'USDC', ${coinAmount}, 0, ${ORDER_STATUS.PENDING_PAYMENT}, ${expiresAt},
+       ${crOrder.id}, ${crOrder.wallet_address}, ${coinAmount})
+    RETURNING id, expires_at, cr_order_id, payment_address, coin_amount
   `
 
   res.status(201).json({
     orderId: order.id,
-    paymentAddress: PAYMENT_ADDRESS,
-    paymentAmount,
-    currency,
+    paymentAddress: order.payment_address,
+    paymentAmount: Number(order.coin_amount),
+    currency: 'USDC',
     expiresAt: order.expires_at,
     estimatedReadyAt: null,
   })
@@ -56,10 +81,9 @@ ordersRouter.post('/', async (req, res) => {
 
 ordersRouter.get('/:id', async (req, res) => {
   const [order] = await sql`
-    SELECT id, status, brand_name, face_value, payment_amount, payment_currency,
-           tx_hash, expires_at, failure_reason
-    FROM orders
-    WHERE id = ${req.params.id}
+    SELECT id, status, brand_name, face_value, coin_amount, payment_address,
+           expires_at, failure_reason, cr_order_id
+    FROM orders WHERE id = ${req.params.id}
   `
   if (!order) return res.status(404).json({ error: 'order not found' })
 
@@ -68,9 +92,10 @@ ordersRouter.get('/:id', async (req, res) => {
     status: order.status,
     brandName: order.brand_name,
     faceValue: order.face_value,
-    paymentAmount: order.payment_amount,
-    currency: order.payment_currency,
-    txHash: order.tx_hash ?? null,
+    paymentAmount: Number(order.coin_amount ?? 0),
+    currency: 'USDC',
+    paymentAddress: order.payment_address,
+    txHash: null,
     expiresAt: order.expires_at,
     estimatedReadyAt: null,
     deliveredAt: null,
@@ -93,3 +118,16 @@ ordersRouter.get('/:id/progress', async (req, res) => {
     failureReason: order.failure_reason ?? null,
   })
 })
+
+function getOrderProgress(status: string) {
+  const MAP: Record<string, { step: number; totalSteps: number; label: string; terminal: boolean }> = {
+    [ORDER_STATUS.PENDING_PAYMENT]:      { step: 1, totalSteps: 4, label: 'Waiting for payment',         terminal: false },
+    [ORDER_STATUS.USER_DEBITED]:         { step: 2, totalSteps: 4, label: 'Payment received',             terminal: false },
+    [ORDER_STATUS.HOT_WALLET_FUNDED]:    { step: 3, totalSteps: 4, label: 'Processing with provider',    terminal: false },
+    [ORDER_STATUS.BITREFILL_PROCESSING]: { step: 3, totalSteps: 4, label: 'Issuing your card',           terminal: false },
+    [ORDER_STATUS.DELIVERED]:            { step: 4, totalSteps: 4, label: 'Card delivered to your email', terminal: true  },
+    [ORDER_STATUS.FAILED]:               { step: 4, totalSteps: 4, label: 'Order failed',                terminal: true  },
+    [ORDER_STATUS.REFUNDED]:             { step: 4, totalSteps: 4, label: 'Order refunded',              terminal: true  },
+  }
+  return MAP[status] ?? { step: 1, totalSteps: 4, label: status, terminal: false }
+}

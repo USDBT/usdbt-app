@@ -6,7 +6,6 @@ import { ordersRouter } from './routes/orders'
 import { usersRouter } from './routes/users'
 import { balancesRouter } from './routes/balances'
 import { authRouter } from './routes/auth'
-import { webhooksRouter } from './routes/webhooks'
 import { startPoller } from './services/poller'
 import { sql, runMigrations } from './lib/db'
 
@@ -14,41 +13,29 @@ const app = express()
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
 
 function logConfigPresence(): void {
-  const requiredNonSecretVars = [
-    'DATABASE_URL',
-    'PAYMENT_WALLET_ADDRESS',
-  ] as const
-
-  const missing = requiredNonSecretVars.filter((name) => !process.env[name]?.trim())
-  const set = requiredNonSecretVars.filter((name) => !!process.env[name]?.trim())
-
+  const required = ['DATABASE_URL', 'CRYPTOREFILLS_PARTNER_ID', 'PAYMENT_WALLET_ADDRESS'] as const
   console.log('[config] required env presence:')
-  for (const name of set) console.log(`[config] ${name}=set`)
-  for (const name of missing) console.warn(`[config] ${name}=missing`)
+  for (const name of required) {
+    if (process.env[name]?.trim()) console.log(`[config] ${name}=set`)
+    else console.warn(`[config] ${name}=missing`)
+  }
 }
 
 app.use((req, res, next) => {
   const startedAt = Date.now()
   const ts = new Date().toISOString()
   const ip = req.ip ?? req.socket.remoteAddress ?? 'unknown'
-
   res.on('finish', () => {
-    const durationMs = Date.now() - startedAt
-    console.log(
-      `[request] ${ts} ip=${ip} method=${req.method} path=${req.originalUrl} status=${res.statusCode} durationMs=${durationMs}`
-    )
+    console.log(`[request] ${ts} ip=${ip} method=${req.method} path=${req.originalUrl} status=${res.statusCode} durationMs=${Date.now() - startedAt}`)
   })
-
   next()
 })
 
 app.use(express.json())
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
-    credentials: true,
-  })
-)
+app.use(cors({
+  origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  credentials: true,
+}))
 
 app.use('/health', healthRouter)
 app.use('/auth', authRouter)
@@ -56,7 +43,6 @@ app.use('/products', productsRouter)
 app.use('/orders', ordersRouter)
 app.use('/users', usersRouter)
 app.use('/balances', balancesRouter)
-app.use('/webhooks', webhooksRouter)
 
 app.listen(PORT, async () => {
   console.log(`[usdtb-backend] listening on port ${PORT}`)

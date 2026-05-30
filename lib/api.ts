@@ -1,12 +1,12 @@
 export interface Product {
-  id: string
-  name: string
+  id: string          // family_name from Cryptorefills
+  name: string        // brand display name
   type: string
   categories?: string[]
   denominations: number[]
   range: { min: number; max: number; step: number } | null
   country: string
-  countryCode?: string
+  countryCode: string
   currency: string
   image: string
   imageKey?: string
@@ -21,143 +21,33 @@ export function titleize(value: string): string {
     .join(' ')
 }
 
-// More-specific overrides must come before less-specific ones (first match wins)
-const DOMAIN_OVERRIDES: Record<string, string> = {
-  // Apple family — specific first
-  'apple music':       'apple.com',
-  'app store':         'apple.com',
-  'itunes':            'apple.com',
-  'apple':             'apple.com',
-  // Google family
-  'google play':       'play.google.com',
-  'youtube':           'youtube.com',
-  // Gaming
-  'steam':             'steampowered.com',
-  'xbox':              'xbox.com',
-  'playstation':       'playstation.com',
-  'nintendo':          'nintendo.com',
-  'roblox':            'roblox.com',
-  'battle.net':        'battle.net',
-  'battlenet':         'battle.net',
-  'ea ':               'ea.com',
-  // Streaming / music
-  'disney':            'disneyplus.com',
-  'hbo':               'hbomax.com',
-  'twitch':            'twitch.tv',
-  'spotify':           'spotify.com',
-  'deezer':            'deezer.com',
-  'tidal':             'tidal.com',
-  'audible':           'audible.com',
-  // Shopping
-  'amazon':            'amazon.com',
-  'ebay':              'ebay.com',
-  'walmart':           'walmart.com',
-  'target':            'target.com',
-  'best buy':          'bestbuy.com',
-  'foot locker':       'footlocker.com',
-  "macy's":            'macys.com',
-  'west elm':          'westelm.com',
-  'whole foods':       'wholefoodsmarket.com',
-  'wayfair':           'wayfair.com',
-  'etsy':              'etsy.com',
-  // Food & delivery
-  'doordash':          'doordash.com',
-  'grubhub':           'grubhub.com',
-  'ubereats':          'ubereats.com',
-  'uber eats':         'ubereats.com',
-  'seamless':          'seamless.com',
-  'instacart':         'instacart.com',
-  'chipotle':          'chipotle.com',
-  'domino':            'dominos.com',
-  'starbucks':         'starbucks.com',
-  'dunkin':            'dunkindonuts.com',
-  // Travel / ride
-  'airbnb':            'airbnb.com',
-  'uber':              'uber.com',
-  'lyft':              'lyft.com',
-  'expedia':           'expedia.com',
-  // Telecom
-  'at&t':              'att.com',
-  't-mobile':          't-mobile.com',
-  'verizon':           'verizon.com',
-  'mint mobile':       'mintmobile.com',
-  // Other
-  'bloomin':           'bloominbrands.com',
-  "ruth's chris":      'ruthschris.com',
-  'visa':              'visa.com',
-  'mastercard':        'mastercard.com',
-  'paypal':            'paypal.com',
-}
-
-function brandLogoUrl(name: string): string {
-  const lower = name.toLowerCase()
-
-  for (const [key, domain] of Object.entries(DOMAIN_OVERRIDES)) {
-    if (lower.includes(key)) return `https://logo.clearbit.com/${domain}`
-  }
-
-  // Strip gift-card noise words AND country/region suffixes before deriving domain
-  const clean = name
-    .replace(/\be-?gift\s+card\b/gi, '')
-    .replace(/\bgift\s+card\b/gi, '')
-    .replace(/\b(egift|voucher|prepaid|recharge|reload|topup|top[\s-]up|card|gift|pin|store|usa|uk|us|ca|canada|global|worldwide|international)\b/gi, '')
-    .replace(/[^a-zA-Z0-9\s]/g, '')
-    .trim()
-  const slug = clean.replace(/\s+/g, '').toLowerCase()
-  if (slug.length >= 3) return `https://logo.clearbit.com/${slug}.com`
-
-  return ''
-}
-
 function normalizeProduct(raw: any): Product {
-  const packageAmounts = Array.isArray(raw?.packages)
-    ? raw.packages
-        .map((pkg: any) => Number(pkg?.amount ?? pkg?.value))
-        .filter((n: number) => Number.isFinite(n))
-    : []
-
   const denominations = Array.isArray(raw?.denominations)
-    ? raw.denominations
-    : Array.isArray(raw?.fixed_denominations)
-      ? raw.fixed_denominations
-      : packageAmounts
+    ? raw.denominations.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n))
+    : []
 
   const range = raw?.range && typeof raw.range === 'object'
     ? {
-        min: Number(raw.range.min ?? raw.range.minimum ?? 0),
-        max: Number(raw.range.max ?? raw.range.maximum ?? 0),
+        min: Number(raw.range.min ?? 0),
+        max: Number(raw.range.max ?? 0),
         step: Number(raw.range.step ?? 1),
       }
     : null
 
-  // Bitrefill v2 `image` field is an internal token slug, not a URL.
-  // Their CDN is signed-URL restricted. Use Clearbit logo API instead.
-  const imageValue = raw?.image
-  const rawImage =
-    typeof imageValue === 'string'
-      ? imageValue
-      : typeof imageValue === 'object' && imageValue
-        ? String(imageValue.url ?? imageValue.src ?? imageValue.logo ?? '')
-        : String(raw?.image_url ?? raw?.logo ?? raw?.logo_url ?? '')
-
-  const image = /^https?:\/\//i.test(rawImage)
-    ? rawImage                           // already a full URL — use it
-    : brandLogoUrl(String(raw?.name ?? ''))  // derive from brand name via Clearbit
-
-  const name = String(raw?.name ?? 'Unknown')
+  const image = String(raw?.image ?? raw?.logo_url ?? '')
 
   return {
     id: String(raw?.id ?? ''),
-    name,
-    type: String(raw?.type ?? raw?.categories?.[0] ?? 'gift_card'),
+    name: String(raw?.name ?? 'Unknown'),
+    type: String(raw?.type ?? 'gift_card'),
     categories: Array.isArray(raw?.categories) ? raw.categories.map((c: any) => String(c)) : [],
-    denominations: denominations.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)),
-    range: range && Number.isFinite(range.min) && Number.isFinite(range.max) ? range : null,
-    country: String(raw?.country_name ?? raw?.country ?? ''),
-    countryCode: String(raw?.country_code ?? ''),
-    currency: String(raw?.currency ?? ''),
+    denominations,
+    range: range && range.min > 0 && range.max > 0 ? range : null,
+    country: String(raw?.country ?? ''),
+    countryCode: String(raw?.countryCode ?? raw?.country_code ?? 'US'),
+    currency: String(raw?.currency ?? 'USD'),
     image,
-    imageKey: rawImage || undefined,
+    imageKey: raw?.imageKey ?? undefined,
   }
 }
 
@@ -188,6 +78,7 @@ export interface OrderStatus {
   faceValue: number
   paymentAmount: number
   currency: string
+  paymentAddress?: string
   txHash: string | null
   expiresAt: string
   estimatedReadyAt?: string | null
@@ -215,25 +106,41 @@ export interface OrderProgress {
 }
 
 export function priceLabel(p: Product): string {
-  if (Array.isArray(p.denominations) && p.denominations.length > 0) return `From $${Math.min(...p.denominations)}`
+  if (p.denominations.length > 0) return `From $${Math.min(...p.denominations)}`
   if (p.range) return `$${p.range.min}–$${p.range.max}`
   return 'Variable'
 }
 
-export async function fetchProducts(page = 0): Promise<Product[]> {
-  const res = await fetch(`/api/products?page=${page}`)
+export async function fetchProducts(_page = 0): Promise<Product[]> {
+  const res = await fetch('/api/products')
   if (!res.ok) throw new Error('failed to load products')
   const data = await res.json()
   const list = data.products ?? data.items ?? data.data ?? (Array.isArray(data) ? data : [])
   return Array.isArray(list) ? list.map(normalizeProduct).filter((p) => !!p.id) : []
 }
 
+export async function fetchProductDetail(familyName: string): Promise<Pick<Product, 'denominations' | 'range'>> {
+  const res = await fetch(`/api/products/${encodeURIComponent(familyName)}`)
+  if (!res.ok) throw new Error('failed to load product details')
+  const data = await res.json()
+  const denominations = Array.isArray(data.denominations)
+    ? data.denominations.map(Number).filter(Number.isFinite)
+    : []
+  const range = data.range && data.range.max > 0
+    ? { min: Number(data.range.min), max: Number(data.range.max), step: Number(data.range.step ?? 1) }
+    : null
+  return { denominations, range }
+}
+
 export async function createOrder(body: {
-  productId: string
-  value: number
+  brandName: string
+  familyName: string
+  countryCode: string
+  denomination: string | number
+  productValue?: number
+  faceValue: number
   email: string
   walletAddress: string
-  currency: string
 }): Promise<OrderCreated> {
   const res = await fetch('/api/orders', {
     method: 'POST',

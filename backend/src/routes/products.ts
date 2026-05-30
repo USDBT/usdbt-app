@@ -1,51 +1,103 @@
 import { Router } from 'express'
-import { listProducts, getProduct, getProductImage } from '../lib/bitrefill'
+import { listBrands, getProductOptions, type CRBrand, type CRProductOption } from '../lib/cryptorefills'
 
 export const productsRouter = Router()
 
-productsRouter.get('/', async (req, res) => {
+// ── In-memory cache ───────────────────────────────────────────────────────────
+
+interface CachedBrands { data: any[]; expiresAt: number }
+let brandsCache: CachedBrands | null = null
+const BRANDS_TTL_MS = 60 * 60 * 1000   // 1 hour
+
+const productCache = new Map<string, { data: any; expiresAt: number }>()
+const PRODUCT_TTL_MS = 30 * 60 * 1000  // 30 min
+
+// ── Normalizers ───────────────────────────────────────────────────────────────
+
+function normalizeBrand(b: CRBrand) {
+  const logoBase = b.logo_base_url ?? ''
+  return {
+    id: b.family_name,
+    name: b.brand_name,
+    type: 'gift_card',
+    categories: b.categories ?? [],
+    denominations: [] as number[],
+    range: null,
+    country: '',
+    countryCode: 'US',
+    currency: 'USD',
+    image: logoBase ? `${logoBase}.webp` : (b.logo_url ?? ''),
+    imageKey: b.family_name,
+  }
+}
+
+function normalizeProductOptions(options: CRProductOption[]): {
+  denominations: number[]
+  range: { min: number; max: number; step: number } | null
+} {
+  if (!options.length) return { denominations: [], range: null }
+
+  const first = options[0]
+  const isRange = String(first.denomination).toLowerCase() === 'range'
+
+  if (isRange) {
+    return {
+      denominations: [],
+      range: {
+        min: Number(first.min ?? 1),
+        max: Number(first.max ?? 500),
+        step: Number(first.step ?? 1),
+      },
+    }
+  }
+
+  const denoms = options
+    .map((o) => Number(o.face_value ?? o.denomination))
+    .filter((n) => Number.isFinite(n) && n > 0)
+    .sort((a, b) => a - b)
+
+  return { denominations: denoms, range: null }
+}
+
+// ── Routes ────────────────────────────────────────────────────────────────────
+
+// GET /products — brand catalog (cached 1hr)
+productsRouter.get('/', async (_req, res) => {
   try {
-    const page = parseInt(String(req.query.page ?? '0'), 10)
-    const data = await listProducts(page)
-    res.json(data)
+    const now = Date.now()
+    if (!brandsCache || now > brandsCache.expiresAt) {
+      const brands = await listBrands('US')
+      brandsCache = { data: brands.map(normalizeBrand), expiresAt: now + BRANDS_TTL_MS }
+    }
+    res.json({ products: brandsCache.data })
   } catch (err) {
     console.error('[products] list failed:', err)
     res.status(502).json({ error: 'failed to fetch products' })
   }
 })
 
+// GET /products/:id — denomination details for a brand (cached 30min)
 productsRouter.get('/:id', async (req, res) => {
+  const familyName = req.params.id
   try {
-    const data = await getProduct(req.params.id)
-    res.json(data)
-  } catch (err) {
-    console.error('[products] get failed:', err)
-    res.status(502).json({ error: 'failed to fetch product' })
-  }
-})
+    const now = Date.now()
+    const cached = productCache.get(familyName)
+    if (cached && now < cached.expiresAt) return res.json(cached.data)
 
-productsRouter.get('/:id/image', async (req, res) => {
-  try {
-    const ref = typeof req.query.ref === 'string' && req.query.ref.trim().length > 0 ? req.query.ref.trim() : null
-    const candidates = [ref, req.params.id].filter(Boolean) as string[]
-    let imageRes: Response | null = null
-    for (const candidate of candidates) {
-      try {
-        imageRes = await getProductImage(candidate)
-        break
-      } catch {
-        // try next candidate
-      }
+    let brandName = familyName
+    if (brandsCache) {
+      const found = brandsCache.data.find((b: any) => b.id === familyName)
+      if (found) brandName = found.name
     }
-    if (!imageRes) throw new Error('Image not found for product')
-    const contentType = imageRes.headers.get('content-type') ?? 'image/png'
-    const cacheControl = imageRes.headers.get('cache-control') ?? 'public, max-age=3600'
-    const ab = await imageRes.arrayBuffer()
-    res.setHeader('Content-Type', contentType)
-    res.setHeader('Cache-Control', cacheControl)
-    res.status(200).send(Buffer.from(ab))
+
+    const options = await getProductOptions(familyName, 'US')
+    const { denominations, range } = normalizeProductOptions(options)
+
+    const result = { id: familyName, name: brandName, denominations, range }
+    productCache.set(familyName, { data: result, expiresAt: now + PRODUCT_TTL_MS })
+    res.json(result)
   } catch (err) {
-    console.error('[products] image failed:', err)
-    res.status(404).json({ error: 'image not found' })
+    console.error(`[products] detail failed for ${familyName}:`, err)
+    res.status(502).json({ error: 'failed to fetch product details' })
   }
 })
