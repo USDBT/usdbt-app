@@ -337,7 +337,7 @@ export function OrderForm({
           <button
             onClick={submit}
             disabled={!valid || loading}
-            className="w-full py-3 bg-[--color-brand] hover:bg-[--color-brand-hover] text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3 text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2" style={{ backgroundColor: '#2b2bf5' }}
           >
             {loading && <span className="loading-bar-spinner" aria-hidden="true" />}
             {loading ? 'Creating order…' : 'Continue to payment'}
