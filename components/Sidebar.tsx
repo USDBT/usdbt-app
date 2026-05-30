@@ -245,7 +245,7 @@ function SidebarContent({
                         key={sub}
                         onClick={() => { onSubCategorySelect?.(sub); onNavigate('shop'); onClose?.() }}
                         whileTap={{ scale: 0.96 }}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+                        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-gray-500 border border-transparent hover:border-[rgba(43,43,245,0.2)] hover:shadow-[inset_3px_3px_8px_rgba(43,43,245,0.08),inset_-3px_-3px_8px_rgba(43,43,245,0.08)] hover:text-gray-700 transition-all"
                       >
                         <SubIcon size={12} className="text-gray-400 flex-shrink-0" />
                         {sub}
