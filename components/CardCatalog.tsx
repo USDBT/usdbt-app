@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, MoreHorizontal, LayoutGrid, List, Bookmark } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { fetchProducts, priceLabel, titleize, type Product } from '@/lib/api'
@@ -165,6 +165,19 @@ function ProductCard({
   )
 }
 
+const PAGE_SIZE = 24
+
+function SkeletonCard() {
+  return (
+    <div className="relative p-3.5 rounded-xl border border-[rgba(43,43,245,0.15)] bg-white min-h-[130px] flex flex-col animate-pulse">
+      <div className="w-10 h-10 rounded-xl mb-3 bg-gray-100" />
+      <div className="h-3 bg-gray-100 rounded w-3/4 mb-2" />
+      <div className="h-2.5 bg-gray-100 rounded w-1/2 mb-auto" />
+      <div className="mt-4 h-2.5 bg-gray-100 rounded w-1/3" />
+    </div>
+  )
+}
+
 export function CardCatalog({
   search,
   selectedProduct,
@@ -182,61 +195,33 @@ export function CardCatalog({
 }) {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
-  const [page, setPage] = useState(0)
-  const [hasMore, setHasMore] = useState(true)
   const [category, setCategory] = useState<'all' | 'fixed' | 'variable'>('all')
   const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc'>('name_asc')
-  const [uiPage, setUiPage] = useState(1)
-  const perPage = 20
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let cancelled = false
-    async function loadAll() {
-      try {
-        const all: Product[] = []
-        let p = 0
-        while (true) {
-          const items = await fetchProducts(p)
-          if (cancelled) return
-          if (items.length === 0) break
-          all.push(...items)
-          setProducts([...all])
-          if (items.length < 50) break
-          p++
-        }
-        setHasMore(false)
-      } catch {
-        if (!cancelled) setError('Failed to load gift cards. Try refreshing.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    loadAll()
+    fetchProducts()
+      .then((items) => { if (!cancelled) setProducts(items) })
+      .catch(() => { if (!cancelled) setError('Failed to load gift cards. Try refreshing.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [])
 
-  async function loadMore() {
-    if (loadingMore || !hasMore) return
-    setLoadingMore(true)
-    try {
-      const nextPage = page + 1
-      const items = await fetchProducts(nextPage)
-      setProducts((prev) => {
-        const map = new Map(prev.map((p) => [p.id, p] as const))
-        for (const item of items) map.set(item.id, item)
-        return Array.from(map.values())
-      })
-      setPage(nextPage)
-      setHasMore(items.length > 0)
-    } catch {
-      setError('Failed to load more cards.')
-    } finally {
-      setLoadingMore(false)
-    }
-  }
+  // Reveal more cards as user scrolls to the sentinel
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisibleCount((c) => c + PAGE_SIZE) },
+      { rootMargin: '200px' },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [loading])
 
   const featured = FEATURED
     .map((name) => products.find((p) => p.name.toLowerCase().includes(name.toLowerCase())))
@@ -255,12 +240,12 @@ export function CardCatalog({
       return a.name.localeCompare(b.name)
     })
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage))
-  const paged = filtered.slice((uiPage - 1) * perPage, uiPage * perPage)
+  const visible = filtered.slice(0, visibleCount)
+  const hasMore = visible.length < filtered.length
 
   useEffect(() => {
-    setUiPage(1)
-  }, [search, category, sortBy, products.length, categoryFilter])
+    setVisibleCount(PAGE_SIZE)
+  }, [search, category, sortBy, categoryFilter])
 
   if (loading) {
     return (
@@ -424,7 +409,7 @@ export function CardCatalog({
           </table>
         ) : (
           <div className="p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-            {paged.map((p, i) => {
+            {visible.map((p, i) => {
               const isSaved = savedIds?.has(p.id) ?? false
               return (
                 <ProductCard
@@ -438,38 +423,17 @@ export function CardCatalog({
                 />
               )
             })}
+            {/* Skeleton cards while more are being revealed */}
+            {hasMore && Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={`sk-${i}`} />
+            ))}
+            {/* Scroll sentinel */}
+            <div ref={sentinelRef} className="col-span-full h-1" />
           </div>
         )}
 
-        <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
-          <p className="text-xs text-gray-400">{filtered.length} cards loaded</p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setUiPage((p) => Math.max(1, p - 1))}
-              disabled={uiPage <= 1}
-              className="text-xs font-medium px-2.5 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Prev
-            </button>
-            <span className="text-xs text-gray-500">Page {uiPage} / {totalPages}</span>
-            <button
-              onClick={() => setUiPage((p) => Math.min(totalPages, p + 1))}
-              disabled={uiPage >= totalPages}
-              className="text-xs font-medium px-2.5 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
-            >
-              Next
-            </button>
-            {hasMore && (
-              <button
-                onClick={loadMore}
-                disabled={loadingMore}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 flex items-center gap-1.5"
-              >
-                {loadingMore && <Loader2 size={12} className="animate-spin" />}
-                {loadingMore ? 'Loading…' : 'Load more'}
-              </button>
-            )}
-          </div>
+        <div className="px-5 py-3 border-t border-gray-100">
+          <p className="text-xs text-gray-400">{filtered.length} cards</p>
         </div>
       </div>
     </div>
