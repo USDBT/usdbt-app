@@ -5,10 +5,11 @@ import {
   ShoppingBag, ScrollText, Bookmark, Users, Grid2X2,
   Settings, HelpCircle, Wallet, ChevronDown, ChevronRight, X,
   Gift, Gamepad2, Tv, Plane, Utensils, ShoppingCart,
-  ArrowDownToLine, Copy, Check,
+  ArrowDownToLine, Copy, Check, RefreshCw,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useAccount } from 'wagmi'
+import { getWalletBalances } from '@/lib/api'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -35,7 +36,47 @@ const SHOP_SUBS = [
   { label: 'Shopping',   icon: ShoppingCart },
 ]
 
-function BalanceDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+type Balance = { usdc: string; usdbt: string }
+const balanceCache = new Map<string, Balance>()
+
+function useWalletBalance(address?: string) {
+  const [balance, setBalance] = useState<Balance | null>(
+    address ? (balanceCache.get(address) ?? null) : null
+  )
+  const [loading, setLoading] = useState(false)
+
+  const fetchBalance = useCallback(async (bust = false) => {
+    if (!address) return
+    if (!bust && balanceCache.has(address)) {
+      setBalance(balanceCache.get(address)!)
+      return
+    }
+    setLoading(true)
+    try {
+      const data = await getWalletBalances(address)
+      balanceCache.set(address, data)
+      setBalance(data)
+    } catch {}
+    finally { setLoading(false) }
+  }, [address])
+
+  useEffect(() => { fetchBalance() }, [fetchBalance])
+
+  const reload = useCallback(() => {
+    if (address) balanceCache.delete(address)
+    fetchBalance(true)
+  }, [address, fetchBalance])
+
+  return { balance, loading, reload }
+}
+
+function BalanceDrawer({ open, onClose, balance, loading, onReload }: {
+  open: boolean
+  onClose: () => void
+  balance: Balance | null
+  loading: boolean
+  onReload: () => void
+}) {
   const { address, isConnected } = useAccount()
   const [copied, setCopied] = useState(false)
   const isMobile = useIsMobile()
@@ -81,13 +122,23 @@ function BalanceDrawer({ open, onClose }: { open: boolean; onClose: () => void }
 
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <h2 className="text-base font-semibold text-gray-900">Wallet</h2>
-              <motion.button
-                onClick={onClose}
-                whileTap={{ scale: 0.88 }}
-                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
-              >
-                <X size={16} />
-              </motion.button>
+              <div className="flex items-center gap-1">
+                <motion.button
+                  onClick={onReload}
+                  whileTap={{ scale: 0.88 }}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                  title="Refresh balance"
+                >
+                  <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                </motion.button>
+                <motion.button
+                  onClick={onClose}
+                  whileTap={{ scale: 0.88 }}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+                >
+                  <X size={16} />
+                </motion.button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
@@ -127,15 +178,15 @@ function BalanceDrawer({ open, onClose }: { open: boolean; onClose: () => void }
                     <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Balances</p>
                     <div className="space-y-2">
                       {[
-                        { label: 'USDC',   sub: 'USD Coin on Base',    value: '0.00' },
-                        { label: '$USDBT', sub: 'USDBT token on Base', value: '0.00' },
+                        { label: 'USDC',   sub: 'USD Coin on Base',    value: balance?.usdc ?? '—' },
+                        { label: '$USDBT', sub: 'USDBT token on Base', value: balance?.usdbt ?? '—' },
                       ].map(({ label, sub, value }) => (
                         <div key={label} className="flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-gray-100">
                           <div>
                             <p className="text-sm font-semibold text-gray-800">{label}</p>
                             <p className="text-xs text-gray-400">{sub}</p>
                           </div>
-                          <p className="text-sm font-medium text-gray-600">{value}</p>
+                          <p className={`text-sm font-medium ${loading ? 'text-gray-300 animate-pulse' : 'text-gray-600'}`}>{value}</p>
                         </div>
                       ))}
                     </div>
@@ -167,6 +218,9 @@ function SidebarContent({
   onSettingsClick,
   onHelpClick,
   onBalanceClick,
+  onReloadBalance,
+  balance,
+  balanceLoading,
   shopExpanded,
   onShopToggle,
   onSubCategorySelect,
@@ -177,6 +231,9 @@ function SidebarContent({
   onSettingsClick?: () => void
   onHelpClick?: () => void
   onBalanceClick?: () => void
+  onReloadBalance?: () => void
+  balance: Balance | null
+  balanceLoading: boolean
   shopExpanded: boolean
   onShopToggle: () => void
   onSubCategorySelect?: (label: string) => void
@@ -278,23 +335,33 @@ function SidebarContent({
           Help
         </motion.button>
 
-        <motion.button
-          onClick={onBalanceClick}
-          whileTap={{ scale: 0.98 }}
-          className="w-full mt-3 px-3 py-3 rounded-xl bg-white border border-[rgba(43,43,245,0.25)] shadow-[inset_5px_5px_12px_rgba(43,43,245,0.08),inset_-5px_-5px_12px_rgba(43,43,245,0.08)] hover:border-[rgba(43,43,245,0.5)] hover:shadow-[inset_7px_7px_16px_rgba(43,43,245,0.16),inset_-7px_-7px_16px_rgba(43,43,245,0.16)] transition-all text-left"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Wallet size={13} className="text-gray-400" />
-              <span className="text-[12px] font-medium text-gray-500">Balance</span>
+        <div className="mt-3 rounded-xl bg-white border border-[rgba(43,43,245,0.25)] shadow-[inset_5px_5px_12px_rgba(43,43,245,0.08),inset_-5px_-5px_12px_rgba(43,43,245,0.08)] hover:border-[rgba(43,43,245,0.5)] hover:shadow-[inset_7px_7px_16px_rgba(43,43,245,0.16),inset_-7px_-7px_16px_rgba(43,43,245,0.16)] transition-all overflow-hidden">
+          <motion.button
+            onClick={onBalanceClick}
+            whileTap={{ scale: 0.98 }}
+            className="w-full px-3 pt-3 pb-2 text-left"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Wallet size={13} className="text-gray-400" />
+                <span className="text-[12px] font-medium text-gray-500">Balance</span>
+              </div>
+              <ChevronRight size={12} className="text-gray-400" />
             </div>
-            <ChevronRight size={12} className="text-gray-400" />
+            <p className={`text-[11px] mt-0.5 ${balanceLoading ? 'text-gray-300 animate-pulse' : 'text-gray-400'}`}>
+              {balance ? `${balance.usdc} USDC` : '— USDC'}
+            </p>
+          </motion.button>
+          <div className="px-3 pb-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); onReloadBalance?.() }}
+              className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-[#2b2bf5] transition-colors"
+            >
+              <RefreshCw size={10} className={balanceLoading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
           </div>
-          <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: '0%', backgroundColor: '#2b2bf5' }} />
-          </div>
-          <p className="text-[11px] text-gray-400 mt-1.5">0.00 USDC available</p>
-        </motion.button>
+        </div>
       </div>
     </div>
   )
@@ -319,6 +386,8 @@ export function Sidebar({
 }) {
   const [shopExpanded, setShopExpanded] = useState(false)
   const [balanceOpen, setBalanceOpen] = useState(false)
+  const { address, isConnected } = useAccount()
+  const { balance, loading: balanceLoading, reload: reloadBalance } = useWalletBalance(isConnected ? address : undefined)
 
   const sharedProps = {
     active,
@@ -328,11 +397,14 @@ export function Sidebar({
     shopExpanded,
     onShopToggle: () => setShopExpanded((e) => !e),
     onSubCategorySelect,
+    balance,
+    balanceLoading,
+    onReloadBalance: reloadBalance,
   }
 
   return (
     <>
-      <BalanceDrawer open={balanceOpen} onClose={() => setBalanceOpen(false)} />
+      <BalanceDrawer open={balanceOpen} onClose={() => setBalanceOpen(false)} balance={balance} loading={balanceLoading} onReload={reloadBalance} />
 
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-[190px] flex-shrink-0 bg-white border-r border-gray-100 h-full">
