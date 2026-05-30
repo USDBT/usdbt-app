@@ -111,7 +111,7 @@ function CategoriesView({
               <button
                 key={label}
                 onClick={() => { onSubCategorySelect(label); onNavigate('shop') }}
-                className="flex flex-col items-start p-4 rounded-xl border border-gray-100 hover:border-gray-300 hover:shadow-sm transition-all bg-white text-left"
+                className="flex flex-col items-start p-4 rounded-xl border border-[rgba(43,43,245,0.3)] bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.18),inset_-5px_-5px_12px_rgba(43,43,245,0.18)] hover:border-[rgba(43,43,245,0.6)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.32),inset_-7px_-7px_18px_rgba(43,43,245,0.32)] transition-all text-left"
               >
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: '#eef0ff' }}>
                   <Icon size={18} style={{ color: '#2b2bf5' }} />
@@ -123,6 +123,36 @@ function CategoriesView({
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+function SavedCard({ product: p, index, onSelect, onToggleSave }: {
+  product: Product; index: number; onSelect: (p: Product) => void; onToggleSave: (p: Product) => void
+}) {
+  const [shineKey, setShineKey] = useState(0)
+  return (
+    <div
+      className="relative border border-[rgba(43,43,245,0.3)] rounded-xl p-3.5 bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.18),inset_-5px_-5px_12px_rgba(43,43,245,0.18)] hover:border-[rgba(43,43,245,0.6)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.32),inset_-7px_-7px_18px_rgba(43,43,245,0.32)] transition-all flex flex-col overflow-hidden"
+      onMouseEnter={() => setShineKey(k => k + 1)}
+    >
+      <div key={shineKey} className="card-shine-sweep" style={{ '--shine-delay': shineKey === 0 ? `${index * 60}ms` : '0ms' } as React.CSSProperties} />
+      <button onClick={() => onToggleSave(p)} className="absolute top-2.5 right-2.5 p-1 rounded-md transition-colors z-20" aria-label="Unsave">
+        <Bookmark size={13} className="fill-[#2b2bf5] text-[#2b2bf5]" />
+      </button>
+      <button onClick={() => onSelect(p)} className="flex flex-col flex-1 text-left w-full relative z-10">
+        <div className="w-full h-20 rounded-xl mb-3 overflow-hidden bg-gray-50 flex items-center justify-center">
+          {p.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={p.image} alt={p.name} className="w-full h-full object-contain p-1.5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+          ) : (
+            <span className="text-2xl font-bold text-gray-300">{p.name[0]}</span>
+          )}
+        </div>
+        <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{p.name}</p>
+        <p className="text-xs text-gray-400 mt-1">{p.country || 'Global'}</p>
+        <p className="text-xs text-gray-500 mt-auto pt-2">{p.denominations.length > 0 ? `From $${Math.min(...p.denominations)}` : p.range ? `$${p.range.min}–$${p.range.max}` : 'Variable'}</p>
+      </button>
     </div>
   )
 }
@@ -151,32 +181,8 @@ function SavedView({
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
         <h2 className="text-sm font-semibold text-gray-800 mb-4">Saved Cards</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-          {savedCards.map((p) => (
-            <div key={p.id} className="relative border border-gray-100 rounded-xl p-3.5 bg-white hover:border-gray-300 hover:shadow-sm transition-all flex flex-col">
-              <button
-                onClick={() => onToggleSave(p)}
-                className="absolute top-2.5 right-2.5 p-1 rounded-md transition-colors z-10"
-                aria-label="Unsave"
-              >
-                <Bookmark size={13} className="fill-[#2b2bf5] text-[#2b2bf5]" />
-              </button>
-              <button onClick={() => onSelect(p)} className="flex flex-col flex-1 text-left w-full">
-                <div className="w-full h-20 rounded-xl mb-3 overflow-hidden bg-gray-50 flex items-center justify-center">
-                  {p.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.image} alt={p.name} className="w-full h-full object-contain p-1.5"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                  ) : (
-                    <span className="text-2xl font-bold text-gray-300">{p.name[0]}</span>
-                  )}
-                </div>
-                <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{p.name}</p>
-                <p className="text-xs text-gray-400 mt-1">{p.country || 'Global'}</p>
-                <p className="text-xs text-gray-500 mt-auto pt-2">{
-                  p.denominations.length > 0 ? `From $${Math.min(...p.denominations)}` : p.range ? `$${p.range.min}–$${p.range.max}` : 'Variable'
-                }</p>
-              </button>
-            </div>
+          {savedCards.map((p, i) => (
+            <SavedCard key={p.id} product={p} index={i} onSelect={onSelect} onToggleSave={onToggleSave} />
           ))}
         </div>
       </div>

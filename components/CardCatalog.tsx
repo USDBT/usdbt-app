@@ -109,6 +109,62 @@ function ProductThumb({ product, className }: { product: Product; className?: st
   )
 }
 
+function ProductCard({
+  product, index, selected, isSaved, onSelect, onToggleSave,
+}: {
+  product: Product
+  index: number
+  selected: boolean
+  isSaved: boolean
+  onSelect: (p: Product) => void
+  onToggleSave?: (p: Product) => void
+}) {
+  const [shineKey, setShineKey] = useState(0)
+
+  return (
+    <div
+      className={`relative text-left p-3.5 rounded-xl border transition-all min-h-[130px] flex flex-col overflow-hidden ${
+        selected
+          ? 'border-[#2b2bf5] bg-[#eef0ff] shadow-[inset_6px_6px_14px_rgba(43,43,245,0.18),inset_-6px_-6px_14px_rgba(43,43,245,0.18)]'
+          : 'border-[rgba(43,43,245,0.3)] bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.18),inset_-5px_-5px_12px_rgba(43,43,245,0.18)] hover:border-[rgba(43,43,245,0.6)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.32),inset_-7px_-7px_18px_rgba(43,43,245,0.32)]'
+      }`}
+      onMouseEnter={() => setShineKey((k) => k + 1)}
+    >
+      {/* Shine sweep */}
+      <div
+        key={shineKey}
+        className="card-shine-sweep"
+        style={{ '--shine-delay': shineKey === 0 ? `${index * 60}ms` : '0ms' } as React.CSSProperties}
+      />
+
+      {onToggleSave && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleSave(product) }}
+          className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/80 hover:bg-white shadow-sm transition-colors z-20"
+          aria-label={isSaved ? 'Unsave' : 'Save'}
+        >
+          <Bookmark size={15} className={isSaved ? 'fill-[#2b2bf5] text-[#2b2bf5]' : 'text-gray-400'} />
+        </button>
+      )}
+      <motion.button
+        onClick={() => onSelect(product)}
+        whileTap={{ scale: 0.96 }}
+        className="flex flex-col flex-1 text-left w-full relative z-10"
+      >
+        <ProductThumb product={product} className="w-10 h-10 rounded-xl mb-3 overflow-hidden flex-shrink-0" />
+        <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{product.name}</p>
+        <p className="text-xs text-gray-400 mt-1">{categoryLabel(product)}</p>
+        <div className="mt-auto pt-2">
+          <p className="text-xs text-gray-500">{priceLabel(product)}</p>
+          <span className="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
+            {brandType(product.denominations, product.range)}
+          </span>
+        </div>
+      </motion.button>
+    </div>
+  )
+}
+
 export function CardCatalog({
   search,
   selectedProduct,
@@ -368,42 +424,18 @@ export function CardCatalog({
           </table>
         ) : (
           <div className="p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-            {paged.map((p) => {
+            {paged.map((p, i) => {
               const isSaved = savedIds?.has(p.id) ?? false
               return (
-                <div
+                <ProductCard
                   key={p.id}
-                  className={`relative text-left p-3.5 rounded-xl border transition-all min-h-[130px] flex flex-col ${
-                    selectedProduct?.id === p.id
-                      ? 'border-[#2b2bf5] bg-[#eef0ff] shadow-[inset_6px_6px_14px_rgba(43,43,245,0.18),inset_-6px_-6px_14px_rgba(43,43,245,0.18)]'
-                      : 'border-[rgba(43,43,245,0.3)] bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.18),inset_-5px_-5px_12px_rgba(43,43,245,0.18)] hover:border-[rgba(43,43,245,0.6)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.32),inset_-7px_-7px_18px_rgba(43,43,245,0.32)]'
-                  }`}
-                >
-                  {onToggleSave && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onToggleSave(p) }}
-                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/80 hover:bg-white shadow-sm transition-colors z-10"
-                      aria-label={isSaved ? 'Unsave' : 'Save'}
-                    >
-                      <Bookmark size={15} className={isSaved ? 'fill-[#2b2bf5] text-[#2b2bf5]' : 'text-gray-400'} />
-                    </button>
-                  )}
-                  <motion.button
-                    onClick={() => onSelect(p)}
-                    whileTap={{ scale: 0.96 }}
-                    className="flex flex-col flex-1 text-left w-full"
-                  >
-                    <ProductThumb product={p} className="w-10 h-10 rounded-xl mb-3 overflow-hidden flex-shrink-0" />
-                    <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{p.name}</p>
-                    <p className="text-xs text-gray-400 mt-1">{categoryLabel(p)}</p>
-                    <div className="mt-auto pt-2">
-                      <p className="text-xs text-gray-500">{priceLabel(p)}</p>
-                      <span className="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
-                        {brandType(p.denominations, p.range)}
-                      </span>
-                    </div>
-                  </motion.button>
-                </div>
+                  product={p}
+                  index={i}
+                  selected={selectedProduct?.id === p.id}
+                  isSaved={isSaved}
+                  onSelect={onSelect}
+                  onToggleSave={onToggleSave}
+                />
               )
             })}
           </div>

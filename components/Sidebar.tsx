@@ -209,10 +209,10 @@ function SidebarContent({
             <motion.button
               onClick={() => handleNavClick(id)}
               whileTap={{ scale: 0.97 }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors ${
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
                 active === id
-                  ? 'bg-[--color-brand-light] text-[--color-brand]'
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                  ? 'bg-[--color-brand-light] text-[--color-brand] border border-[rgba(43,43,245,0.3)] shadow-[inset_4px_4px_10px_rgba(43,43,245,0.12),inset_-4px_-4px_10px_rgba(43,43,245,0.12)]'
+                  : 'text-gray-500 border border-transparent hover:bg-gray-50 hover:text-gray-800 hover:border-[rgba(43,43,245,0.15)] hover:shadow-[inset_4px_4px_10px_rgba(43,43,245,0.06),inset_-4px_-4px_10px_rgba(43,43,245,0.06)]'
               }`}
             >
               <Icon size={15} className={active === id ? 'text-[--color-brand]' : 'text-gray-400'} />
@@ -281,7 +281,7 @@ function SidebarContent({
         <motion.button
           onClick={onBalanceClick}
           whileTap={{ scale: 0.98 }}
-          className="w-full mt-3 px-3 py-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+          className="w-full mt-3 px-3 py-3 rounded-xl bg-white border border-[rgba(43,43,245,0.25)] shadow-[inset_5px_5px_12px_rgba(43,43,245,0.08),inset_-5px_-5px_12px_rgba(43,43,245,0.08)] hover:border-[rgba(43,43,245,0.5)] hover:shadow-[inset_7px_7px_16px_rgba(43,43,245,0.16),inset_-7px_-7px_16px_rgba(43,43,245,0.16)] transition-all text-left"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
