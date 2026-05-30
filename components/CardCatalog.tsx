@@ -137,14 +137,29 @@ export function CardCatalog({
   const perPage = 20
 
   useEffect(() => {
-    fetchProducts(0)
-      .then((items) => {
-        setProducts(items)
-        setPage(0)
-        setHasMore(items.length >= 100)
-      })
-      .catch(() => setError('Failed to load gift cards. Try refreshing.'))
-      .finally(() => setLoading(false))
+    let cancelled = false
+    async function loadAll() {
+      try {
+        const all: Product[] = []
+        let p = 0
+        while (true) {
+          const items = await fetchProducts(p)
+          if (cancelled) return
+          if (items.length === 0) break
+          all.push(...items)
+          setProducts([...all])
+          if (items.length < 50) break
+          p++
+        }
+        setHasMore(false)
+      } catch {
+        if (!cancelled) setError('Failed to load gift cards. Try refreshing.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    loadAll()
+    return () => { cancelled = true }
   }, [])
 
   async function loadMore() {
@@ -159,7 +174,7 @@ export function CardCatalog({
         return Array.from(map.values())
       })
       setPage(nextPage)
-      setHasMore(items.length >= 100)
+      setHasMore(items.length > 0)
     } catch {
       setError('Failed to load more cards.')
     } finally {
