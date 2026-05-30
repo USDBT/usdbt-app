@@ -209,8 +209,8 @@ export function CardCatalog({
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[60vh] gap-4">
-        <Loader2 size={52} className="animate-spin" style={{ color: '#2b2bf5' }} />
-        <p className="text-base text-gray-400">Loading gift cards…</p>
+        <Loader2 size={72} className="animate-spin" style={{ color: '#2b2bf5' }} />
+        <p className="text-lg text-gray-400">Loading gift cards…</p>
       </div>
     )
   }
