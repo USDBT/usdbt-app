@@ -299,7 +299,7 @@ function SidebarContent({
                       className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-gray-500 border border-transparent hover:border-[rgba(43,43,245,0.2)] hover:shadow-[inset_3px_3px_8px_rgba(43,43,245,0.08),inset_-3px_-3px_8px_rgba(43,43,245,0.08)] hover:text-gray-700 transition-all"
                     >
                       <LayoutGrid size={12} className="text-gray-400 flex-shrink-0" />
-                      All Cards
+                      All gift cards
                     </motion.button>
                     {categories.map(({ slug, label, icon: SubIcon }) => (
                       <motion.button

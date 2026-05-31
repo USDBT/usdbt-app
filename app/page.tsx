@@ -104,7 +104,7 @@ function CategoriesView({
               <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: '#eef0ff' }}>
                 <Grid2X2 size={18} style={{ color: '#2b2bf5' }} />
               </div>
-              <p className="text-sm font-medium text-gray-800">All Cards</p>
+              <p className="text-sm font-medium text-gray-800">All gift cards</p>
               <p className="text-xs text-gray-400 mt-0.5">{products.length} cards</p>
             </button>
             {categories.map(({ slug, label, icon: Icon, count }) => (

@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 export type Tab = 'cards' | 'activity' | 'spend' | 'support'
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-  { id: 'cards',    label: 'Cards',    icon: CreditCard },
+  { id: 'cards',    label: 'Card',     icon: CreditCard },
   { id: 'activity', label: 'Activity', icon: Activity   },
   { id: 'spend',    label: 'Spend',    icon: DollarSign },
   { id: 'support',  label: 'Support',  icon: LifeBuoy   },
