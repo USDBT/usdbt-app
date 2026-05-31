@@ -17,10 +17,11 @@ import { PaymentScreen } from '@/components/PaymentScreen'
 import { SuccessScreen } from '@/components/SuccessScreen'
 import { SplashScreen } from '@/components/SplashScreen'
 import { CommandSearch } from '@/components/CommandSearch'
+import { VirtualCard } from '@/components/VirtualCard'
 import { SettingsDrawer } from '@/components/SettingsDrawer'
 import { HelpDrawer } from '@/components/HelpDrawer'
 import { EmailCaptureModal } from '@/components/EmailCaptureModal'
-import { fetchProducts, getOrderProgress, getOrderStats, type Product, type OrderProgress, type OrderStats } from '@/lib/api'
+import { fetchProducts, getOrderProgress, getOrderStats, getWalletBalances, type Product, type OrderProgress, type OrderStats } from '@/lib/api'
 import { deriveCategories } from '@/lib/categories'
 import { useAuth } from '@/hooks/useAuth'
 import { getStoredEmail, storeEmail, clearToken, getValidToken, authHeaders } from '@/lib/auth'
@@ -529,6 +530,8 @@ export default function Home() {
   const [splashDone, setSplashDone] = useState(false)
   const [view, setView] = useState<View>('shop')
   const [activeTab, setActiveTab] = useState<Tab>('cards')
+  const [browsing, setBrowsing] = useState(false)
+  const [cardBalance, setCardBalance] = useState<{ usdc: string } | null>(null)
   const [step, setStep] = useState<Step>('catalog')
   const [product, setProduct] = useState<Product | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
@@ -548,6 +551,16 @@ export default function Home() {
   useEffect(() => {
     fetchProducts().then(setAllProducts).catch(() => {})
   }, [])
+
+  // Fetch wallet balance for the virtual card
+  useEffect(() => {
+    if (!isConnected || !address) { setCardBalance(null); return }
+    let cancelled = false
+    getWalletBalances(address)
+      .then((b) => { if (!cancelled) setCardBalance({ usdc: b.usdc }) })
+      .catch(() => { if (!cancelled) setCardBalance(null) })
+    return () => { cancelled = true }
+  }, [isConnected, address])
 
   // After wallet connect: authenticate (SIWE → JWT), then check user registration
   useEffect(() => {
@@ -629,6 +642,8 @@ export default function Home() {
     reset()
     setSearch('')
     if (v !== 'shop') setCategoryFilter(null)
+    // Entering Shop (or its sub-categories) means the user wants to browse the catalog
+    if (v === 'shop') { setBrowsing(true); setActiveTab('cards') }
   }
 
   function handleTabChange(tab: Tab) {
@@ -636,6 +651,8 @@ export default function Home() {
       setHelpOpen(true)
       return
     }
+    // Header tabs are the wallet-card surface, not the catalog
+    setBrowsing(false)
     setActiveTab(tab)
   }
 
@@ -655,6 +672,7 @@ export default function Home() {
           setProduct(p)
           setStep('configure')
           setView('shop')
+          setBrowsing(true)
         }}
       />
 
@@ -711,7 +729,7 @@ export default function Home() {
                   <p className="text-[11px] text-gray-300 mt-4">No KYC · On Base · Instant delivery</p>
                 </div>
               ) : view === 'shop' ? (
-                activeTab === 'cards' ? (
+                browsing ? (
                   <div className="p-4 md:p-5">
                     <CardCatalog
                       search={search}
@@ -722,20 +740,17 @@ export default function Home() {
                       categoryFilter={categoryFilter}
                     />
                   </div>
+                ) : activeTab === 'cards' ? (
+                  <div className="p-4 md:p-8 flex flex-col items-center justify-center min-h-full">
+                    <VirtualCard address={address} balanceUsdc={cardBalance?.usdc} />
+                  </div>
                 ) : activeTab === 'activity' ? (
                   <ActivityView address={address} />
                 ) : activeTab === 'spend' ? (
                   <SpendView address={address} />
                 ) : (
-                  <div className="p-4 md:p-5">
-                    <CardCatalog
-                      search={search}
-                      selectedProduct={product}
-                      onSelect={(p) => { setProduct(p); setStep('configure') }}
-                      savedIds={new Set(savedCards.map((c) => c.id))}
-                      onToggleSave={handleToggleSave}
-                      categoryFilter={categoryFilter}
-                    />
+                  <div className="p-4 md:p-8 flex flex-col items-center justify-center min-h-full">
+                    <VirtualCard address={address} balanceUsdc={cardBalance?.usdc} />
                   </div>
                 )
               ) : view === 'orders' ? (
@@ -743,7 +758,7 @@ export default function Home() {
               ) : view === 'saved' ? (
                 <SavedView
                   savedCards={savedCards}
-                  onSelect={(p) => { setProduct(p); setStep('configure'); setView('shop') }}
+                  onSelect={(p) => { setProduct(p); setStep('configure'); setView('shop'); setBrowsing(true) }}
                   onToggleSave={handleToggleSave}
                 />
               ) : view === 'refer' ? (
