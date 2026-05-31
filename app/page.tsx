@@ -652,7 +652,8 @@ export default function Home() {
       setHelpOpen(true)
       return
     }
-    // Header tabs are the wallet-card surface, not the catalog
+    // Header tabs live on the shop/card surface — switch back to it from any view
+    setView('shop')
     setBrowsing(false)
     setActiveTab(tab)
   }
@@ -705,7 +706,7 @@ export default function Home() {
           <Header
             search={search}
             onSearch={setSearch}
-            activeTab={activeTab}
+            activeTab={view === 'shop' && !browsing ? activeTab : null}
             onTabChange={handleTabChange}
             onHamburgerClick={() => setMobileMenuOpen(true)}
             onOpenSearch={() => setSearchOpen(true)}

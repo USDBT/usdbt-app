@@ -24,7 +24,7 @@ export function Header({
 }: {
   search: string
   onSearch: (v: string) => void
-  activeTab: Tab
+  activeTab: Tab | null
   onTabChange: (t: Tab) => void
   onHamburgerClick: () => void
   onOpenSearch?: () => void
