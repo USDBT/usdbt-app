@@ -532,6 +532,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>('cards')
   const [browsing, setBrowsing] = useState(false)
   const [cardBalance, setCardBalance] = useState<{ usdc: string } | null>(null)
+  const [balanceOpen, setBalanceOpen] = useState(false)
   const [step, setStep] = useState<Step>('catalog')
   const [product, setProduct] = useState<Product | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
@@ -688,7 +689,7 @@ export default function Home() {
 
       <div className="flex h-screen overflow-hidden bg-[--color-surface]">
         <Sidebar
-          active={view}
+          active={view === 'shop' && !browsing ? null : view}
           onNavigate={handleNavigate}
           mobileOpen={mobileMenuOpen}
           onMobileClose={() => setMobileMenuOpen(false)}
@@ -696,6 +697,8 @@ export default function Home() {
           onHelpClick={() => setHelpOpen(true)}
           onSubCategorySelect={handleSubCategorySelect}
           categories={deriveCategories(allProducts)}
+          balanceOpen={balanceOpen}
+          onBalanceOpenChange={setBalanceOpen}
         />
 
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
@@ -742,7 +745,13 @@ export default function Home() {
                   </div>
                 ) : activeTab === 'cards' ? (
                   <div className="p-4 md:p-8 flex flex-col items-center justify-center min-h-full">
-                    <VirtualCard address={address} balanceUsdc={cardBalance?.usdc} />
+                    <VirtualCard
+                      address={address}
+                      balanceUsdc={cardBalance?.usdc}
+                      onViewCatalog={() => { setBrowsing(true); setView('shop') }}
+                      onViewOrders={() => handleNavigate('orders')}
+                      onTopUp={() => setBalanceOpen(true)}
+                    />
                   </div>
                 ) : activeTab === 'activity' ? (
                   <ActivityView address={address} />
@@ -750,7 +759,13 @@ export default function Home() {
                   <SpendView address={address} />
                 ) : (
                   <div className="p-4 md:p-8 flex flex-col items-center justify-center min-h-full">
-                    <VirtualCard address={address} balanceUsdc={cardBalance?.usdc} />
+                    <VirtualCard
+                      address={address}
+                      balanceUsdc={cardBalance?.usdc}
+                      onViewCatalog={() => { setBrowsing(true); setView('shop') }}
+                      onViewOrders={() => handleNavigate('orders')}
+                      onTopUp={() => setBalanceOpen(true)}
+                    />
                   </div>
                 )
               ) : view === 'orders' ? (

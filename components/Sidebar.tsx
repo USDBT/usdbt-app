@@ -218,7 +218,7 @@ function SidebarContent({
   categories = [],
   collapsed = false,
 }: {
-  active: View
+  active: View | null
   onNavigate: (v: View) => void
   onClose?: () => void
   onSettingsClick?: () => void
@@ -392,8 +392,10 @@ export function Sidebar({
   onHelpClick,
   onSubCategorySelect,
   categories = [],
+  balanceOpen: balanceOpenProp,
+  onBalanceOpenChange,
 }: {
-  active: View
+  active: View | null
   onNavigate: (v: View) => void
   mobileOpen?: boolean
   onMobileClose?: () => void
@@ -401,9 +403,15 @@ export function Sidebar({
   onHelpClick?: () => void
   onSubCategorySelect?: (slug: string | null) => void
   categories?: DerivedCategory[]
+  balanceOpen?: boolean
+  onBalanceOpenChange?: (open: boolean) => void
 }) {
   const [shopExpanded, setShopExpanded] = useState(false)
-  const [balanceOpen, setBalanceOpen] = useState(false)
+  const [balanceOpenInternal, setBalanceOpenInternal] = useState(false)
+  const balanceOpen = balanceOpenProp ?? balanceOpenInternal
+  const setBalanceOpen = (open: boolean) => {
+    onBalanceOpenChange ? onBalanceOpenChange(open) : setBalanceOpenInternal(open)
+  }
   const [collapsed, setCollapsed] = useState(false)
   const { address, isConnected } = useAccount()
   const { balance, loading: balanceLoading, reload: reloadBalance } = useWalletBalance(isConnected ? address : undefined)
