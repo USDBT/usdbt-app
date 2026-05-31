@@ -243,10 +243,16 @@ function SidebarContent({
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className={`flex items-center py-[18px] flex-shrink-0 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
-        <div className="flex items-center gap-2.5">
-          <Image src="/logo.png" alt="$USDBT" width={28} height={28} className="rounded-lg" />
-          {!collapsed && <span className="font-semibold text-[15px] text-gray-900">$USDBT</span>}
-        </div>
+        <a
+          href="https://usdbt.us"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2.5 rounded-lg hover:opacity-80 transition-opacity"
+          title="Go to usdbt.us"
+        >
+          <Image src="/logo.png" alt="USDBT" width={38} height={38} className="rounded-lg" />
+          {!collapsed && <span className="font-bold text-[19px] text-gray-900 tracking-tight">USDBT</span>}
+        </a>
         {onClose && !collapsed && (
           <button onClick={onClose} className="md:hidden p-1 rounded-lg hover:bg-gray-100 text-gray-400">
             <X size={14} />
