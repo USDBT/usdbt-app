@@ -3,6 +3,8 @@ import { sql } from '../lib/db'
 import { validateOrder, createCROrder, requiredEnv } from '../lib/cryptorefills'
 import { ORDER_STATUS } from '../lib/order-status'
 import { isAddress } from 'viem'
+import { SIMULATE, simulateConfig, simulatedCoinAmount } from '../lib/simulate'
+import { sendDeliveryEmail } from '../lib/email'
 
 export const ordersRouter = Router()
 
@@ -28,9 +30,41 @@ ordersRouter.post('/', async (req, res) => {
   const userIp = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ?? '127.0.0.1'
   const userAgent = req.headers['user-agent'] ?? 'usdbt-backend/1.0'
 
+  if (SIMULATE) {
+    const coinAmount = simulatedCoinAmount(Number(faceValue))
+    const expiresAt = new Date(Date.now() + ORDER_TTL_MINUTES * 60 * 1000)
+    const [order] = await sql`
+      INSERT INTO orders
+        (wallet_address, email, card_type, brand_id, brand_name, face_value,
+         payment_currency, payment_amount, fee_rate, status, expires_at,
+         payment_address, coin_amount)
+      VALUES
+        (${walletAddress}, ${email}, 'gift_card', ${familyName}, ${brandName}, ${faceValue},
+         'USDC', ${coinAmount}, 0, ${ORDER_STATUS.PENDING_PAYMENT}, ${expiresAt},
+         ${simulateConfig.paymentAddress}, ${coinAmount})
+      RETURNING id, expires_at, payment_address, coin_amount
+    `
+
+    const orderId = order.id
+    setTimeout(async () => {
+      try {
+        await sql`UPDATE orders SET status = ${ORDER_STATUS.DELIVERED} WHERE id = ${orderId}`
+        sendDeliveryEmail(email, { brandName, faceValue: Number(faceValue) }).catch(() => {})
+      } catch {}
+    }, simulateConfig.fulfillmentDelayMs)
+
+    return res.status(201).json({
+      orderId: order.id,
+      paymentAddress: order.payment_address,
+      paymentAmount: Number(order.coin_amount),
+      currency: 'USDC',
+      expiresAt: order.expires_at,
+      estimatedReadyAt: null,
+    })
+  }
+
   const crInput = { brandName, countryCode, denomination, productValue, email, userIp, userAgent }
 
-  // Validate with CR before creating
   let validation: { ok: boolean; problems: any[] }
   try {
     validation = await validateOrder(crInput)
@@ -43,7 +77,6 @@ ordersRouter.post('/', async (req, res) => {
     return res.status(422).json({ error: first.problem ?? 'order validation failed', problems: validation.problems })
   }
 
-  // Create order with Cryptorefills
   let crOrder
   try {
     crOrder = await createCROrder(crInput)
