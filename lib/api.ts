@@ -54,6 +54,7 @@ function normalizeProduct(raw: any): Product {
 export interface WalletBalances {
   usdc: string
   usdbt: string
+  simulated?: boolean
 }
 
 export interface OrderCreated {

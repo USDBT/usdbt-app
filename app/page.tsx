@@ -24,7 +24,7 @@ import { EmailCaptureModal } from '@/components/EmailCaptureModal'
 import { fetchProducts, getOrderProgress, getOrderStats, getWalletBalances, type Product, type OrderProgress, type OrderStats } from '@/lib/api'
 import { deriveCategories } from '@/lib/categories'
 import { useAuth } from '@/hooks/useAuth'
-import { getStoredEmail, storeEmail, clearToken, getValidToken, authHeaders } from '@/lib/auth'
+import { getStoredEmail, storeEmail, clearToken, getValidToken, authHeaders, deductSimBalance } from '@/lib/auth'
 import { getSavedCards, toggleSavedCard } from '@/lib/savedCards'
 
 type Step = 'catalog' | 'configure' | 'payment' | 'success'
@@ -537,6 +537,8 @@ export default function Home() {
   const [product, setProduct] = useState<Product | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [paymentAddress, setPaymentAddress] = useState('')
+  const [pendingPaymentAmount, setPendingPaymentAmount] = useState(0)
+  const [balanceRefreshKey, setBalanceRefreshKey] = useState(0)
   const [email, setEmail] = useState('')
   const [search, setSearch] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -622,6 +624,7 @@ export default function Home() {
     setOrderId(null)
     setPaymentAddress('')
     setEmail('')
+    setPendingPaymentAmount(0)
   }
 
   function handleToggleSave(p: Product) {
@@ -700,6 +703,7 @@ export default function Home() {
           categories={deriveCategories(allProducts)}
           balanceOpen={balanceOpen}
           onBalanceOpenChange={setBalanceOpen}
+          balanceRefreshKey={balanceRefreshKey}
         />
 
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
@@ -798,10 +802,11 @@ export default function Home() {
                       walletAddress={address!}
                       prefilledEmail={savedEmail || undefined}
                       onClose={reset}
-                      onOrder={(id, addr, mail) => {
+                      onOrder={(id, addr, mail, amt) => {
                         setOrderId(id)
                         setPaymentAddress(addr)
                         setEmail(mail)
+                        setPendingPaymentAmount(amt)
                         setStep('payment')
                       }}
                     />
@@ -811,7 +816,13 @@ export default function Home() {
                       orderId={orderId}
                       paymentAddress={paymentAddress}
                       email={email}
-                      onSuccess={() => setStep('success')}
+                      onSuccess={() => {
+                        if (address && pendingPaymentAmount > 0) {
+                          deductSimBalance(address, pendingPaymentAmount)
+                          setBalanceRefreshKey((k) => k + 1)
+                        }
+                        setStep('success')
+                      }}
                     />
                   )}
                   {step === 'success' && (

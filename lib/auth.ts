@@ -4,6 +4,25 @@ function backendUrl() {
 
 function tokenKey(address: string) { return `usdbt_jwt_${address.toLowerCase()}` }
 function emailKey(address: string) { return `usdbt_email_${address.toLowerCase()}` }
+function simSpentKey(address: string) { return `usdbt_sim_spent_${address.toLowerCase()}` }
+
+// Simulated balance helpers — only used when backend is in SIMULATE mode.
+// Tracks cumulative USDC spent per wallet so the displayed balance decrements on each purchase.
+export function getSimSpent(address: string): number {
+  if (typeof window === 'undefined') return 0
+  return parseFloat(localStorage.getItem(simSpentKey(address)) ?? '0')
+}
+
+export function deductSimBalance(address: string, amount: number) {
+  if (typeof window === 'undefined') return
+  const current = getSimSpent(address)
+  localStorage.setItem(simSpentKey(address), (current + amount).toFixed(6))
+}
+
+export function resetSimBalance(address: string) {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(simSpentKey(address))
+}
 
 export function getStoredToken(address: string): string | null {
   if (typeof window === 'undefined') return null

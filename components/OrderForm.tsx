@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createOrder, fetchProductDetail, getWalletBalances, priceLabel, titleize, type Product } from '@/lib/api'
+import { getSimSpent } from '@/lib/auth'
 
 function SectionLabel({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
   return (
@@ -29,7 +30,7 @@ export function OrderForm({
   walletAddress: string
   prefilledEmail?: string
   onClose: () => void
-  onOrder: (orderId: string, paymentAddress: string, email: string) => void
+  onOrder: (orderId: string, paymentAddress: string, email: string, paymentAmount: number) => void
 }) {
   const [resolvedProduct, setResolvedProduct] = useState(product)
   const [coinAmounts, setCoinAmounts] = useState<Record<number, number>>({})
@@ -89,7 +90,11 @@ export function OrderForm({
       setBalancesLoading(true)
       try {
         const data = await getWalletBalances(walletAddress)
-        if (!cancelled) setUsdcBalance(Number(data.usdc))
+        if (!cancelled) {
+          const raw = Number(data.usdc)
+          const net = data.simulated ? Math.max(0, raw - getSimSpent(walletAddress)) : raw
+          setUsdcBalance(net)
+        }
       } catch {
         if (!cancelled) setUsdcBalance(null)
       } finally {
@@ -125,7 +130,7 @@ function stepVariable(dir: 1 | -1) {
         email,
         walletAddress,
       })
-      onOrder(order.orderId, order.paymentAddress, email)
+      onOrder(order.orderId, order.paymentAddress, email, order.paymentAmount)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'something went wrong')
     } finally {

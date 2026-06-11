@@ -9,6 +9,7 @@ import {
 import { useState, useCallback, useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import { getWalletBalances } from '@/lib/api'
+import { getSimSpent } from '@/lib/auth'
 import type { DerivedCategory } from '@/lib/categories'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -28,25 +29,35 @@ const NAV: { id: View; label: string; icon: React.ElementType }[] = [
 ]
 
 type Balance = { usdc: string; usdbt: string }
-const balanceCache = new Map<string, Balance>()
+type CachedBalance = Balance & { simulated?: boolean }
+const balanceCache = new Map<string, CachedBalance>()
+
+function applySimOffset(raw: CachedBalance, address: string): Balance {
+  if (!raw.simulated) return raw
+  const spent = getSimSpent(address)
+  const net = Math.max(0, parseFloat(raw.usdc) - spent)
+  return { usdc: net.toFixed(2), usdbt: raw.usdbt }
+}
 
 function useWalletBalance(address?: string) {
-  const [balance, setBalance] = useState<Balance | null>(
+  const [rawBalance, setRawBalance] = useState<CachedBalance | null>(
     address ? (balanceCache.get(address) ?? null) : null
   )
   const [loading, setLoading] = useState(false)
 
+  const balance = rawBalance && address ? applySimOffset(rawBalance, address) : rawBalance
+
   const fetchBalance = useCallback(async (bust = false) => {
     if (!address) return
     if (!bust && balanceCache.has(address)) {
-      setBalance(balanceCache.get(address)!)
+      setRawBalance(balanceCache.get(address)!)
       return
     }
     setLoading(true)
     try {
       const data = await getWalletBalances(address)
       balanceCache.set(address, data)
-      setBalance(data)
+      setRawBalance(data)
     } catch {}
     finally { setLoading(false) }
   }, [address])
@@ -400,6 +411,7 @@ export function Sidebar({
   categories = [],
   balanceOpen: balanceOpenProp,
   onBalanceOpenChange,
+  balanceRefreshKey,
 }: {
   active: View | null
   onNavigate: (v: View) => void
@@ -411,6 +423,7 @@ export function Sidebar({
   categories?: DerivedCategory[]
   balanceOpen?: boolean
   onBalanceOpenChange?: (open: boolean) => void
+  balanceRefreshKey?: number
 }) {
   const [shopExpanded, setShopExpanded] = useState(false)
   const [balanceOpenInternal, setBalanceOpenInternal] = useState(false)
@@ -421,6 +434,12 @@ export function Sidebar({
   const [collapsed, setCollapsed] = useState(false)
   const { address, isConnected } = useAccount()
   const { balance, loading: balanceLoading, reload: reloadBalance } = useWalletBalance(isConnected ? address : undefined)
+
+  // When parent increments balanceRefreshKey (e.g. after a purchase), bust cache and re-read localStorage offset
+  useEffect(() => {
+    if (balanceRefreshKey) reloadBalance()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [balanceRefreshKey])
 
   const sharedProps = {
     active,
