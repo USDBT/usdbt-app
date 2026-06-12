@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { publicClient } from '../lib/chain'
 import { parseAbi, isAddress, type Address } from 'viem'
-import { SIMULATE, simulateConfig } from '../lib/simulate'
+import { isSimulatedAddress, simulateConfig } from '../lib/simulate'
 
 export const balancesRouter = Router()
 
@@ -12,8 +12,12 @@ balancesRouter.get('/:address', async (req, res) => {
   const addr = req.params.address
   if (!isAddress(addr)) return res.status(400).json({ error: 'invalid address' })
 
-  if (SIMULATE) {
-    return res.json({ usdc: simulateConfig.balance.usdc, usdbt: simulateConfig.balance.usdbt })
+  if (isSimulatedAddress(addr)) {
+    return res.json({
+      usdc: simulateConfig.balance.usdc,
+      usdbt: simulateConfig.balance.usdbt,
+      simulated: true,
+    })
   }
 
   const USDBT_ADDRESS = process.env.USDTB_TOKEN_ADDRESS as Address | undefined

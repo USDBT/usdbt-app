@@ -24,7 +24,7 @@ import { EmailCaptureModal } from '@/components/EmailCaptureModal'
 import { fetchProducts, getOrderProgress, getOrderStats, getWalletBalances, type Product, type OrderProgress, type OrderStats } from '@/lib/api'
 import { deriveCategories } from '@/lib/categories'
 import { useAuth } from '@/hooks/useAuth'
-import { getStoredEmail, storeEmail, clearToken, getValidToken, authHeaders, deductSimBalance } from '@/lib/auth'
+import { getStoredEmail, storeEmail, clearToken, getValidToken, authHeaders, deductSimBalance, getSimSpent } from '@/lib/auth'
 import { getSavedCards, toggleSavedCard } from '@/lib/savedCards'
 
 type Step = 'catalog' | 'configure' | 'payment' | 'success'
@@ -560,10 +560,16 @@ export default function Home() {
     if (!isConnected || !address) { setCardBalance(null); return }
     let cancelled = false
     getWalletBalances(address)
-      .then((b) => { if (!cancelled) setCardBalance({ usdc: b.usdc }) })
+      .then((b) => {
+        if (!cancelled) {
+          const raw = Number(b.usdc)
+          const net = b.simulated ? Math.max(0, raw - getSimSpent(address)) : raw
+          setCardBalance({ usdc: net.toFixed(2) })
+        }
+      })
       .catch(() => { if (!cancelled) setCardBalance(null) })
     return () => { cancelled = true }
-  }, [isConnected, address])
+  }, [isConnected, address, balanceRefreshKey])
 
   // After wallet connect: authenticate (SIWE → JWT), then check user registration
   useEffect(() => {

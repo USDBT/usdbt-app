@@ -3,7 +3,7 @@ import { sql } from '../lib/db'
 import { validateOrder, createCROrder, requiredEnv } from '../lib/cryptorefills'
 import { ORDER_STATUS } from '../lib/order-status'
 import { isAddress } from 'viem'
-import { SIMULATE, simulateConfig, simulatedCoinAmount } from '../lib/simulate'
+import { isSimulatedAddress, simulateConfig, simulatedCoinAmount } from '../lib/simulate'
 import { sendDeliveryEmail } from '../lib/email'
 
 export const ordersRouter = Router()
@@ -30,7 +30,7 @@ ordersRouter.post('/', async (req, res) => {
   const userIp = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ?? '127.0.0.1'
   const userAgent = req.headers['user-agent'] ?? 'usdbt-backend/1.0'
 
-  if (SIMULATE) {
+  if (isSimulatedAddress(walletAddress)) {
     const coinAmount = simulatedCoinAmount(Number(faceValue))
     const expiresAt = new Date(Date.now() + ORDER_TTL_MINUTES * 60 * 1000)
     const [order] = await sql`
