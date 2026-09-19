@@ -1,10 +1,17 @@
-import { describe, it, expect, mock } from 'bun:test'
+import { describe, it, expect, afterEach, mock } from 'bun:test'
 
 process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/test'
 process.env.RELAY_API_KEY ??= 'test-relay-key'
+process.env.PAYMENT_WALLET_ADDRESS ??= '0x6bcB5Bac495be85C079d780b66352Cd9B1aAAc47'
 
 const insertedRows: any[] = []
 
+// Only mock this order's own collaborators — never '../lib/relay'. bun:test's
+// mock.module is process-wide, not per-file, so mocking a module also used
+// (unmocked) by relay.test.ts/balances.test.ts corrupts those files whenever
+// this file happens to load first (exactly what broke CI: it mocked relay.ts
+// wholesale, and other test files silently got the fake in place of the real
+// module). Fake the network instead — same approach relay.test.ts uses.
 mock.module('../lib/db', () => ({
   requiredEnv: (name: string) => process.env[name] ?? '',
   sql: Object.assign(
@@ -28,26 +35,34 @@ mock.module('../lib/cryptorefills', () => ({
   }),
 }))
 
-const relayQuoteMock = mock(async (opts: { currency: string }) => ({
-  requestId: 'req_1',
-  steps: [{ id: 'deposit', action: 'deposit', description: '', kind: 'transaction', items: [] }],
-  details: {
-    currencyIn: { currency: { symbol: opts.currency, decimals: 6, address: '0x0' }, amount: '26884521', amountFormatted: '26.884521', amountUsd: '26.88' },
-    currencyOut: { amount: '26460000', amountFormatted: '26.46', amountUsd: '26.46' },
-    timeEstimate: 4,
-  },
-}))
-
-mock.module('../lib/relay', () => ({
-  getRelayOrderQuote: relayQuoteMock,
-  ROBINHOOD_CHAIN_ID: 4663,
-}))
-
 mock.module('../lib/email', () => ({
   sendDeliveryEmail: async () => {},
 }))
 
 const { createOrder } = await import('./orders')
+
+const originalFetch = globalThis.fetch
+
+function mockFetchOk() {
+  const calls: Array<{ url: string; init: RequestInit }> = []
+  ;(globalThis as any).fetch = mock(async (url: string, init: RequestInit) => {
+    calls.push({ url, init })
+    const body = JSON.parse(init.body as string)
+    return new Response(
+      JSON.stringify({
+        requestId: 'req_1',
+        steps: [{ id: 'deposit', action: 'deposit', description: '', kind: 'transaction', items: [] }],
+        details: {
+          currencyIn: { currency: { symbol: body.originCurrency, decimals: 6, address: body.originCurrency }, amount: '26884521', amountFormatted: '26.884521', amountUsd: '26.88' },
+          currencyOut: { amount: '26460000', amountFormatted: '26.46', amountUsd: '26.46' },
+          timeEstimate: 4,
+        },
+      }),
+      { status: 200 },
+    )
+  })
+  return calls
+}
 
 function mockReqRes(body: Record<string, unknown>) {
   const req = { body, headers: {} } as any
@@ -67,32 +82,36 @@ const validBody = {
 }
 
 describe('POST /orders', () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
   it('defaults paymentCurrency to USDG when unspecified', async () => {
-    relayQuoteMock.mockClear()
+    const calls = mockFetchOk()
     const { req, res, status, json } = mockReqRes(validBody)
 
     await createOrder(req, res)
 
-    expect(relayQuoteMock).toHaveBeenCalledTimes(1)
-    expect(relayQuoteMock.mock.calls[0][0].currency).toBe('USDG')
+    expect(calls).toHaveLength(1)
+    const relayBody = JSON.parse(calls[0].init.body as string)
+    expect(relayBody.originCurrency).toBe('0x5fc5360d0400a0fd4f2af552add042d716f1d168') // USDG, lowercased
     expect(status).toHaveBeenCalledWith(201)
     expect(json.mock.calls[0][0].paymentCurrency).toBe('USDG')
   })
 
   it('honors paymentCurrency = ETH', async () => {
-    relayQuoteMock.mockClear()
+    const calls = mockFetchOk()
     const { req, res, json } = mockReqRes({ ...validBody, paymentCurrency: 'ETH' })
 
     await createOrder(req, res)
 
-    expect(relayQuoteMock.mock.calls[0][0].currency).toBe('ETH')
+    const relayBody = JSON.parse(calls[0].init.body as string)
+    expect(relayBody.originCurrency).toBe('0x0000000000000000000000000000000000000000')
     expect(json.mock.calls[0][0].paymentCurrency).toBe('ETH')
   })
 
   it('returns 502 when the Relay quote fails', async () => {
-    relayQuoteMock.mockImplementationOnce(async () => {
-      throw new Error('relay down')
-    })
+    ;(globalThis as any).fetch = mock(async () => new Response('relay down', { status: 502 }))
     const { req, res, status, json } = mockReqRes(validBody)
 
     await createOrder(req, res)

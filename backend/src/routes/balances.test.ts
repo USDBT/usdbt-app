@@ -3,8 +3,13 @@ import { describe, it, expect, mock } from 'bun:test'
 process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/test'
 process.env.RELAY_API_KEY ??= 'test-relay-key'
 
+// A dedicated address, distinct from the shared test wallet other test files use for
+// "real" (non-simulated) flows — bun:test's mock.module is process-wide, not per-file,
+// so reusing that address here would make it look simulated wherever this mock leaks.
+const SIMULATED_TEST_ADDRESS = '0x1111111111111111111111111111111111111111'
+
 mock.module('../lib/simulate', () => ({
-  isSimulatedAddress: (addr?: string) => addr?.toLowerCase() === '0xf98a2659fc82a3c996a5ab10ee75ce66376de3f4',
+  isSimulatedAddress: (addr?: string) => addr?.toLowerCase() === SIMULATED_TEST_ADDRESS,
   simulateConfig: { balance: { usdc: '10.00', usdbt: '0.0000' } },
 }))
 
@@ -29,7 +34,7 @@ describe('GET /balances/:address', () => {
   })
 
   it('returns { usdg, eth, chainId: 4663 } for a simulated wallet', async () => {
-    const { req, res, json } = mockReqRes('0xF98a2659Fc82A3c996A5Ab10eE75ce66376De3f4')
+    const { req, res, json } = mockReqRes(SIMULATED_TEST_ADDRESS)
 
     await getBalances(req, res)
 
