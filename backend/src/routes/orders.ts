@@ -1,20 +1,22 @@
-import { Router } from 'express'
+import { Router, type Request, type Response } from 'express'
 import { sql } from '../lib/db'
 import { validateOrder, createCROrder, requiredEnv } from '../lib/cryptorefills'
 import { ORDER_STATUS } from '../lib/order-status'
 import { isAddress } from 'viem'
 import { isSimulatedAddress, simulateConfig, simulatedCoinAmount } from '../lib/simulate'
 import { sendDeliveryEmail } from '../lib/email'
+import { getRelayOrderQuote, ROBINHOOD_CHAIN_ID, type RelayPaymentCurrency } from '../lib/relay'
 
 export const ordersRouter = Router()
 
 const ORDER_TTL_MINUTES = 30
 
-ordersRouter.post('/', async (req, res) => {
+export async function createOrder(req: Request, res: Response) {
   const {
     brandName, familyName, countryCode = 'US',
     denomination, productValue,
     faceValue, email, walletAddress,
+    paymentCurrency = 'USDG',
   } = req.body
 
   if (!brandName || !familyName || !denomination || !faceValue || !email || !walletAddress) {
@@ -26,6 +28,7 @@ ordersRouter.post('/', async (req, res) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: 'invalid email' })
   }
+  const currency: RelayPaymentCurrency = paymentCurrency === 'ETH' ? 'ETH' : 'USDG'
 
   const userIp = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ?? '127.0.0.1'
   const userAgent = req.headers['user-agent'] ?? 'usdbt-backend/1.0'
@@ -36,11 +39,11 @@ ordersRouter.post('/', async (req, res) => {
     const [order] = await sql`
       INSERT INTO orders
         (wallet_address, email, card_type, brand_id, brand_name, face_value,
-         payment_currency, payment_amount, fee_rate, status, expires_at,
+         payment_chain_id, payment_currency, payment_amount, fee_rate, status, expires_at,
          payment_address, coin_amount)
       VALUES
         (${walletAddress}, ${email}, 'gift_card', ${familyName}, ${brandName}, ${faceValue},
-         'USDC', ${coinAmount}, 0, ${ORDER_STATUS.PENDING_PAYMENT}, ${expiresAt},
+         ${ROBINHOOD_CHAIN_ID}, ${currency}, ${coinAmount}, 100, ${ORDER_STATUS.PENDING_PAYMENT}, ${expiresAt},
          ${simulateConfig.paymentAddress}, ${coinAmount})
       RETURNING id, expires_at, payment_address, coin_amount
     `
@@ -55,11 +58,13 @@ ordersRouter.post('/', async (req, res) => {
 
     return res.status(201).json({
       orderId: order.id,
-      paymentAddress: order.payment_address,
+      chainId: ROBINHOOD_CHAIN_ID,
+      paymentCurrency: currency,
       paymentAmount: Number(order.coin_amount),
-      currency: 'USDC',
+      steps: [],
+      timeEstimate: 0,
       expiresAt: order.expires_at,
-      estimatedReadyAt: null,
+      crOrder: { depositAddress: order.payment_address, coinAmount: Number(order.coin_amount), currency: 'USDC' },
     })
   }
 
@@ -85,7 +90,23 @@ ordersRouter.post('/', async (req, res) => {
     return res.status(502).json({ error: 'failed to create order with provider' })
   }
 
-  const coinAmount = Number(crOrder.coin_amount)
+  const crCoinAmount = Number(crOrder.coin_amount)
+  const crDepositAddress = crOrder.wallet_address
+
+  let relayQuote
+  try {
+    relayQuote = await getRelayOrderQuote({
+      userWallet: walletAddress,
+      cryptorefillsDepositAddress: crDepositAddress,
+      cryptorefillsUsdcAmount: crCoinAmount,
+      currency,
+    })
+  } catch (err) {
+    console.error('[orders] Relay quote failed:', err)
+    return res.status(502).json({ error: 'Failed to generate cross-chain payment route' })
+  }
+
+  const exactPaymentAmount = relayQuote.details.currencyIn.amountFormatted
   const expiresAt = crOrder.payment_requested_at
     ? new Date(crOrder.payment_requested_at * 1000 + ORDER_TTL_MINUTES * 60 * 1000)
     : new Date(Date.now() + ORDER_TTL_MINUTES * 60 * 1000)
@@ -93,24 +114,30 @@ ordersRouter.post('/', async (req, res) => {
   const [order] = await sql`
     INSERT INTO orders
       (wallet_address, email, card_type, brand_id, brand_name, face_value,
-       payment_currency, payment_amount, fee_rate, status, expires_at,
-       cr_order_id, payment_address, coin_amount)
+       payment_chain_id, payment_currency, payment_amount, payment_amount_exact,
+       fee_rate, status, expires_at, cr_order_id, payment_address, coin_amount,
+       relay_request_id, relay_steps)
     VALUES
       (${walletAddress}, ${email}, 'gift_card', ${familyName}, ${brandName}, ${faceValue},
-       'USDC', ${coinAmount}, 0, ${ORDER_STATUS.PENDING_PAYMENT}, ${expiresAt},
-       ${crOrder.order_id}, ${crOrder.wallet_address}, ${coinAmount})
-    RETURNING id, expires_at, cr_order_id, payment_address, coin_amount
+       ${ROBINHOOD_CHAIN_ID}, ${currency}, ${Number(exactPaymentAmount)}, ${exactPaymentAmount},
+       100, ${ORDER_STATUS.PENDING_PAYMENT}, ${expiresAt}, ${crOrder.order_id},
+       ${crDepositAddress}, ${crCoinAmount}, ${relayQuote.requestId}, ${sql.json(relayQuote.steps as any)})
+    RETURNING id, expires_at
   `
 
   res.status(201).json({
     orderId: order.id,
-    paymentAddress: order.payment_address,
-    paymentAmount: Number(order.coin_amount),
-    currency: 'USDC',
+    chainId: ROBINHOOD_CHAIN_ID,
+    paymentCurrency: currency,
+    paymentAmount: exactPaymentAmount,
+    steps: relayQuote.steps,
+    timeEstimate: relayQuote.details.timeEstimate,
     expiresAt: order.expires_at,
-    estimatedReadyAt: null,
+    crOrder: { depositAddress: crDepositAddress, coinAmount: crCoinAmount, currency: 'USDC' },
   })
-})
+}
+
+ordersRouter.post('/', createOrder)
 
 ordersRouter.get('/:id', async (req, res) => {
   const [order] = await sql`

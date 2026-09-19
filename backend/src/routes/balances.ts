@@ -1,51 +1,49 @@
-import { Router } from 'express'
-import { publicClient } from '../lib/chain'
-import { parseAbi, isAddress, type Address } from 'viem'
+import { Router, type Request, type Response } from 'express'
+import { createPublicClient, http, parseAbi, isAddress, formatUnits, type Address } from 'viem'
 import { isSimulatedAddress, simulateConfig } from '../lib/simulate'
+import { ROBINHOOD_CHAIN_ID, ROBINHOOD_USDG_ADDRESS } from '../lib/relay'
 
 export const balancesRouter = Router()
 
-const ERC20_ABI = parseAbi(['function balanceOf(address) view returns (uint256)'])
-const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as Address
+const ROBINHOOD_RPC_URL = process.env.ROBINHOOD_RPC_URL ?? 'https://rpc.mainnet.chain.robinhood.com'
+const USDG_ADDRESS = ROBINHOOD_USDG_ADDRESS as Address
 
-balancesRouter.get('/:address', async (req, res) => {
+const robinhoodClient = createPublicClient({ transport: http(ROBINHOOD_RPC_URL) })
+const ERC20_ABI = parseAbi(['function balanceOf(address) view returns (uint256)'])
+
+export async function getBalances(req: Request, res: Response) {
   const addr = req.params.address
   if (!isAddress(addr)) return res.status(400).json({ error: 'invalid address' })
 
   if (isSimulatedAddress(addr)) {
     return res.json({
-      usdc: simulateConfig.balance.usdc,
-      usdbt: simulateConfig.balance.usdbt,
+      usdg: simulateConfig.balance.usdc,
+      eth: '0.0000',
+      chainId: ROBINHOOD_CHAIN_ID,
       simulated: true,
     })
   }
 
-  const USDBT_ADDRESS = process.env.USDTB_TOKEN_ADDRESS as Address | undefined
-
   try {
-    const [usdcRaw, usdbtRaw] = await Promise.all([
-      publicClient.readContract({
-        address: USDC_ADDRESS,
+    const [usdgRaw, ethRaw] = await Promise.all([
+      robinhoodClient.readContract({
+        address: USDG_ADDRESS,
         abi: ERC20_ABI,
         functionName: 'balanceOf',
         args: [addr as Address],
       }),
-      USDBT_ADDRESS
-        ? publicClient.readContract({
-            address: USDBT_ADDRESS,
-            abi: ERC20_ABI,
-            functionName: 'balanceOf',
-            args: [addr as Address],
-          })
-        : Promise.resolve(0n),
+      robinhoodClient.getBalance({ address: addr as Address }),
     ])
 
     res.json({
-      usdc: (Number(usdcRaw) / 1e6).toFixed(2),
-      usdbt: (Number(usdbtRaw) / 1e18).toFixed(4),
+      usdg: formatUnits(usdgRaw, 6),
+      eth: formatUnits(ethRaw, 18),
+      chainId: ROBINHOOD_CHAIN_ID,
     })
   } catch (err) {
     console.error('[balances] error:', err)
     res.status(500).json({ error: 'failed to fetch balances' })
   }
-})
+}
+
+balancesRouter.get('/:address', getBalances)
