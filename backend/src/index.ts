@@ -6,6 +6,7 @@ import { ordersRouter } from './routes/orders'
 import { usersRouter } from './routes/users'
 import { balancesRouter } from './routes/balances'
 import { authRouter } from './routes/auth'
+import { chatRouter } from './routes/chat'
 import { startPoller } from './services/poller'
 import { sql, runMigrations } from './lib/db'
 
@@ -13,7 +14,7 @@ const app = express()
 const PORT = parseInt(process.env.PORT ?? '3001', 10)
 
 function logConfigPresence(): void {
-  const required = ['DATABASE_URL', 'CRYPTOREFILLS_PARTNER_ID', 'PAYMENT_WALLET_ADDRESS'] as const
+  const required = ['DATABASE_URL', 'CRYPTOREFILLS_PARTNER_ID', 'PAYMENT_WALLET_ADDRESS', 'GROQ_API_KEY'] as const
   console.log('[config] required env presence:')
   for (const name of required) {
     if (process.env[name]?.trim()) console.log(`[config] ${name}=set`)
@@ -43,6 +44,7 @@ app.use('/products', productsRouter)
 app.use('/orders', ordersRouter)
 app.use('/users', usersRouter)
 app.use('/balances', balancesRouter)
+app.use('/chat', chatRouter)
 
 app.listen(PORT, async () => {
   console.log(`[usdtb-backend] listening on port ${PORT}`)

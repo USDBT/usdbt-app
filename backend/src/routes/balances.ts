@@ -11,6 +11,23 @@ const USDG_ADDRESS = ROBINHOOD_USDG_ADDRESS as Address
 const robinhoodClient = createPublicClient({ transport: http(ROBINHOOD_RPC_URL) })
 const ERC20_ABI = parseAbi(['function balanceOf(address) view returns (uint256)'])
 
+export async function fetchRobinhoodBalances(addr: Address): Promise<{ usdg: string; eth: string }> {
+  const [usdgRaw, ethRaw] = await Promise.all([
+    robinhoodClient.readContract({
+      address: USDG_ADDRESS,
+      abi: ERC20_ABI,
+      functionName: 'balanceOf',
+      args: [addr],
+    }),
+    robinhoodClient.getBalance({ address: addr }),
+  ])
+
+  return {
+    usdg: formatUnits(usdgRaw, 6),
+    eth: formatUnits(ethRaw, 18),
+  }
+}
+
 export async function getBalances(req: Request, res: Response) {
   const addr = req.params.address
   if (!isAddress(addr)) return res.status(400).json({ error: 'invalid address' })
@@ -25,21 +42,8 @@ export async function getBalances(req: Request, res: Response) {
   }
 
   try {
-    const [usdgRaw, ethRaw] = await Promise.all([
-      robinhoodClient.readContract({
-        address: USDG_ADDRESS,
-        abi: ERC20_ABI,
-        functionName: 'balanceOf',
-        args: [addr as Address],
-      }),
-      robinhoodClient.getBalance({ address: addr as Address }),
-    ])
-
-    res.json({
-      usdg: formatUnits(usdgRaw, 6),
-      eth: formatUnits(ethRaw, 18),
-      chainId: ROBINHOOD_CHAIN_ID,
-    })
+    const balances = await fetchRobinhoodBalances(addr as Address)
+    res.json({ ...balances, chainId: ROBINHOOD_CHAIN_ID })
   } catch (err) {
     console.error('[balances] error:', err)
     res.status(500).json({ error: 'failed to fetch balances' })
