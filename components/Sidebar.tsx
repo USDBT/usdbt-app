@@ -274,7 +274,7 @@ function SidebarContent({
       </div>
 
       {/* Primary nav */}
-      <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto no-scrollbar">
         {NAV.map(({ id, label, icon: Icon }) => (
           <div key={id}>
             <motion.button
