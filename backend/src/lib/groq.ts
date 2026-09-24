@@ -2,10 +2,16 @@ import { requiredEnv } from './db'
 
 export const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
-export function getGroqConfig(): { apiKey: string; model: string } {
+// Groq reserves max_completion_tokens against the per-minute output limit (1000 on the
+// on_demand tier). Without a cap it reserves the model's default, which exceeds that limit.
+const DEFAULT_MAX_COMPLETION_TOKENS = 600
+
+export function getGroqConfig(): { apiKey: string; model: string; maxCompletionTokens: number } {
+  const configured = Number(process.env.GROQ_MAX_COMPLETION_TOKENS)
   return {
     apiKey: requiredEnv('GROQ_API_KEY'),
     model: process.env.GROQ_MODEL || 'qwen/qwen3.8-27b',
+    maxCompletionTokens: Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_MAX_COMPLETION_TOKENS,
   }
 }
 

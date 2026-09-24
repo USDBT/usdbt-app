@@ -153,7 +153,7 @@ export async function handleChat(req: Request, res: Response) {
     return res.status(400).json({ error: 'Streaming mode is required (stream: true)' })
   }
 
-  const { apiKey, model } = getGroqConfig()
+  const { apiKey, model, maxCompletionTokens } = getGroqConfig()
 
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
@@ -177,12 +177,17 @@ export async function handleChat(req: Request, res: Response) {
           tools: AI_TOOLS,
           tool_choice: 'auto',
           temperature: 0.2,
+          max_completion_tokens: maxCompletionTokens,
         }),
       })
 
       if (!response.ok) {
-        const errText = await response.text()
-        res.write(`data: ${JSON.stringify({ type: 'error', error: 'AI provider error', details: errText })}\n\n`)
+        // Provider errors carry account details (org ID, tier); log them, don't send them to the browser
+        console.error('[chat] Groq error', response.status, await response.text())
+        const error = response.status === 429
+          ? 'The assistant is getting a lot of requests. Try again in a minute.'
+          : 'The assistant is unavailable right now. Try again shortly.'
+        res.write(`data: ${JSON.stringify({ type: 'error', error })}\n\n`)
         res.write('data: [DONE]\n\n')
         return res.end()
       }
