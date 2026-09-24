@@ -203,6 +203,8 @@ h1, h2, h3, .font-display {
   .landing-footer { min-height: 92px; padding: 18px 23px; flex-wrap: wrap; gap: 10px; }
   .landing-footer > span:nth-child(2) { display: none; }
 }
+@media (prefers-reduced-motion: reduce) { .landing-page *, .landing-page *::before, .landing-page *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 44px; padding: 0 18px;
