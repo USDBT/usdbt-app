@@ -239,7 +239,7 @@ export function CardCatalog({
       <section className="catalog-intro" aria-labelledby="catalog-heading">
         <div>
           <span className="catalog-kicker">A better way to spend crypto</span>
-          <h1 id="catalog-heading">The things you love,<br className="hidden sm:block" /> ready when you are.</h1>
+          <h1 id="catalog-heading">The things you love, ready when you are.</h1>
           <p>Choose a gift card, pay with USDG or ETH on Robinhood Chain, and get your code delivered to your inbox.</p>
         </div>
         <div className="catalog-proof" aria-label="Marketplace details">
