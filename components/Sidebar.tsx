@@ -354,6 +354,24 @@ function SidebarContent({
           <HelpCircle size={18} />
           {!collapsed && 'Help'}
         </motion.button>
+        <Link
+          href="/roadmap"
+          onClick={() => onClose?.()}
+          title={collapsed ? 'Roadmap' : undefined}
+          className={`nav-item ${collapsed ? 'justify-center' : ''}`}
+        >
+          <Milestone size={18} />
+          {!collapsed && 'Roadmap'}
+        </Link>
+        <Link
+          href="/whitepaper"
+          onClick={() => onClose?.()}
+          title={collapsed ? 'Whitepaper' : undefined}
+          className={`nav-item ${collapsed ? 'justify-center' : ''}`}
+        >
+          <FileText size={18} />
+          {!collapsed && 'Whitepaper'}
+        </Link>
 
         {collapsed ? (
           <button
