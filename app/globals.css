@@ -412,7 +412,7 @@ body { background: #f6f7fb; color: #192132; }
 button, a, input, select { -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid rgba(43,43,245,.24); outline-offset: 2px; }
 .catalog-content { max-width: 1440px; margin: 0 auto; padding: 26px 32px 48px; }
-.catalog-intro { display: grid; grid-template-columns: minmax(0,1.618fr) minmax(220px,1fr); align-items: end; gap: 32px; padding: 10px 2px 28px; }
+.catalog-intro { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 20px; padding: 10px 2px 24px; }
 .catalog-kicker { color: #6f7890; font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
 .catalog-intro h1 { margin: 10px 0 8px; color: var(--ink); font-size: clamp(32px,3.6vw,50px); line-height: 1.02; letter-spacing: -.035em; font-weight: 750; }
 .catalog-intro p { margin: 0; max-width: 480px; color: #7b8498; font-size: 14px; line-height: 1.65; }
