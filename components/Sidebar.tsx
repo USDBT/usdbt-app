@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import {
   ShoppingBag, ScrollText, Bookmark, Users, Grid2X2, LayoutGrid,
   Settings, HelpCircle, Wallet, ChevronDown, ChevronRight, ChevronLeft, X,
