@@ -415,7 +415,7 @@ function stepVariable(dir: 1 | -1) {
 
       {/* Footer CTA */}
       {activeTab === 'order' && (
-        <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0">
+        <div className="px-5 py-3 border-t border-gray-100 flex-shrink-0 bg-white">
           <button
             onClick={submit}
             disabled={!valid || loading}
