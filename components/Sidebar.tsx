@@ -307,7 +307,7 @@ function SidebarContent({
                   transition={{ duration: 0.2, ease: 'easeInOut' }}
                   className="overflow-hidden ml-4 mt-0.5"
                 >
-                  <div className="space-y-0.5 pb-1 max-h-64 overflow-y-auto">
+                  <div className="space-y-0.5 pb-1 max-h-64 overflow-y-auto no-scrollbar">
                     <motion.button
                       onClick={() => { onSubCategorySelect?.(null); onNavigate('shop'); onClose?.() }}
                       whileTap={{ scale: 0.96 }}
