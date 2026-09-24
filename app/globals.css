@@ -456,7 +456,7 @@ main .bg-white.rounded-xl.border-gray-100 h2, main .bg-white.rounded-xl.border-g
 .dashboard-view { padding: 42px 32px !important; }
 .dashboard-heading { width: 100%; max-width: 620px; margin: 0 auto 30px; text-align: center; }
 .dashboard-heading span { color: #78829a; font-size: 10px; font-weight: 700; letter-spacing: .16em; }
-.dashboard-heading h1 { margin: 10px 0 7px; color: #172039; font-size: clamp(25px,3vw,36px); line-height: 1.12; letter-spacing: -.04em; font-weight: 650; }
+.dashboard-heading h1 { margin: 10px 0 7px; color: #172039; font-size: clamp(20px, 2.5vw, 32px); line-height: 1.25; letter-spacing: -.035em; font-weight: 650; word-break: break-word; }
 .dashboard-heading p { margin: 0; color: #7b8498; font-size: 13px; line-height: 1.6; }
 @media (max-width:760px) { .dashboard-view { padding: 27px 18px !important; } .dashboard-heading { margin-bottom: 24px; } }
 
