@@ -146,13 +146,13 @@ function shortAddr(addr?: string): string {
 
 export function VirtualCard({
   address,
-  balanceUsdc,
+  balanceUsdg,
   onViewCatalog,
   onViewOrders,
   onTopUp,
 }: {
   address?: string
-  balanceUsdc?: string
+  balanceUsdg?: string
   onViewCatalog?: () => void
   onViewOrders?: () => void
   onTopUp?: () => void
@@ -285,7 +285,7 @@ export function VirtualCard({
           <div className="flex items-end justify-between">
             <div>
               <p className="text-[9px] uppercase tracking-[0.2em] mb-0.5" style={{ opacity: 0.55 }}>Balance</p>
-              <p className="font-bold text-[15px]">{balanceUsdc ?? '—'} <span className="text-[11px] font-semibold opacity-70">USDC</span></p>
+              <p className="font-bold text-[15px]">{balanceUsdg ?? '—'} <span className="text-[11px] font-semibold opacity-70">USDG</span></p>
             </div>
             <NetworkLogos tone={tone} />
           </div>
@@ -307,10 +307,10 @@ export function VirtualCard({
           <button
             key={label}
             onClick={onClick}
-            className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-white border border-[rgba(43,43,245,0.2)] shadow-[inset_4px_4px_10px_rgba(43,43,245,0.07),inset_-4px_-4px_10px_rgba(43,43,245,0.07)] hover:border-[rgba(43,43,245,0.5)] hover:shadow-[inset_6px_6px_14px_rgba(43,43,245,0.14),inset_-6px_-6px_14px_rgba(43,43,245,0.14)] transition-all"
+            className="tile flex flex-col items-center gap-1.5 py-3"
           >
             <Icon size={17} style={{ color: '#2b2bf5' }} />
-            <span className="text-[11px] font-semibold text-gray-600">{label}</span>
+            <span className="text-[12px] font-semibold text-[--ink]">{label}</span>
           </button>
         ))}
       </div>

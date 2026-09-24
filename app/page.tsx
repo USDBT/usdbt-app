@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { Sidebar, type View } from '@/components/Sidebar'
 import { Header, type Tab } from '@/components/Header'
 import { CardCatalog } from '@/components/CardCatalog'
+import { ShoppingAssistant } from '@/components/ShoppingAssistant'
 import { OrderForm } from '@/components/OrderForm'
 import { PaymentScreen } from '@/components/PaymentScreen'
 import { SuccessScreen } from '@/components/SuccessScreen'
@@ -21,7 +22,7 @@ import { VirtualCard } from '@/components/VirtualCard'
 import { SettingsDrawer } from '@/components/SettingsDrawer'
 import { HelpDrawer } from '@/components/HelpDrawer'
 import { EmailCaptureModal } from '@/components/EmailCaptureModal'
-import { fetchProducts, getOrderProgress, getOrderStats, getWalletBalances, type Product, type OrderProgress, type OrderStats } from '@/lib/api'
+import { fetchProducts, getOrderProgress, getOrderStats, getWalletBalances, type Product, type OrderCreated, type OrderProgress, type OrderStats } from '@/lib/api'
 import { deriveCategories } from '@/lib/categories'
 import { useAuth } from '@/hooks/useAuth'
 import { getStoredEmail, storeEmail, clearToken, getValidToken, authHeaders, deductSimBalance, getSimSpent } from '@/lib/auth'
@@ -99,7 +100,7 @@ function CategoriesView({
             {/* All */}
             <button
               onClick={() => { onSubCategorySelect(null); onNavigate('shop') }}
-              className="flex flex-col items-start p-4 rounded-xl border border-[rgba(43,43,245,0.3)] bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.18),inset_-5px_-5px_12px_rgba(43,43,245,0.18)] hover:border-[rgba(43,43,245,0.6)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.32),inset_-7px_-7px_18px_rgba(43,43,245,0.32)] transition-all text-left"
+              className="tile flex flex-col items-start p-4 text-left"
             >
               <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: '#eef0ff' }}>
                 <Grid2X2 size={18} style={{ color: '#2b2bf5' }} />
@@ -111,7 +112,7 @@ function CategoriesView({
               <button
                 key={slug}
                 onClick={() => { onSubCategorySelect(slug); onNavigate('shop') }}
-                className="flex flex-col items-start p-4 rounded-xl border border-[rgba(43,43,245,0.3)] bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.18),inset_-5px_-5px_12px_rgba(43,43,245,0.18)] hover:border-[rgba(43,43,245,0.6)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.32),inset_-7px_-7px_18px_rgba(43,43,245,0.32)] transition-all text-left"
+                className="tile flex flex-col items-start p-4 text-left"
               >
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-3" style={{ backgroundColor: '#eef0ff' }}>
                   <Icon size={18} style={{ color: '#2b2bf5' }} />
@@ -127,31 +128,26 @@ function CategoriesView({
   )
 }
 
-function SavedCard({ product: p, index, onSelect, onToggleSave }: {
+function SavedCard({ product: p, onSelect, onToggleSave }: {
   product: Product; index: number; onSelect: (p: Product) => void; onToggleSave: (p: Product) => void
 }) {
-  const [shineKey, setShineKey] = useState(0)
   return (
-    <div
-      className="relative border border-[rgba(43,43,245,0.3)] rounded-xl p-3.5 bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.18),inset_-5px_-5px_12px_rgba(43,43,245,0.18)] hover:border-[rgba(43,43,245,0.6)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.32),inset_-7px_-7px_18px_rgba(43,43,245,0.32)] transition-all flex flex-col overflow-hidden"
-      onMouseEnter={() => setShineKey(k => k + 1)}
-    >
-      <div key={shineKey} className="card-shine-sweep" style={{ '--shine-delay': shineKey === 0 ? `${index * 60}ms` : '0ms' } as React.CSSProperties} />
-      <button onClick={() => onToggleSave(p)} className="absolute top-2.5 right-2.5 p-1 rounded-md transition-colors z-30" aria-label="Unsave">
-        <Bookmark size={13} className="fill-[#2b2bf5] text-[#2b2bf5]" />
+    <div className="product-card tile relative flex flex-col">
+      <button onClick={() => onToggleSave(p)} className="product-save" aria-label={`Remove ${p.name} from saved`} aria-pressed>
+        <Bookmark size={14} className="fill-[--color-brand] text-[--color-brand]" />
       </button>
-      <button onClick={() => onSelect(p)} className="flex flex-col flex-1 text-left w-full relative z-10">
-        <div className="w-full h-20 rounded-xl mb-3 overflow-hidden bg-gray-50 flex items-center justify-center">
+      <button onClick={() => onSelect(p)} className="flex flex-col flex-1 text-left w-full">
+        <div className="product-face flex items-center justify-center">
           {p.image ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.image} alt={p.name} className="w-full h-full object-contain p-1.5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            <img src={p.image} alt={p.name} className="w-full h-full" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
           ) : (
-            <span className="text-2xl font-bold text-gray-300">{p.name[0]}</span>
+            <span className="font-display text-2xl font-bold text-gray-300">{p.name[0]}</span>
           )}
         </div>
-        <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{p.name}</p>
-        <p className="text-xs text-gray-400 mt-1">{p.country || 'Global'}</p>
-        <p className="text-xs text-gray-500 mt-auto pt-2">{p.denominations.length > 0 ? `From $${Math.min(...p.denominations)}` : p.range ? `$${p.range.min}–$${p.range.max}` : 'Variable'}</p>
+        <p className="product-name line-clamp-2">{p.name}</p>
+        <p className="product-meta">{p.country || 'Global'}</p>
+        <p className="product-price font-mono tabular">{p.denominations.length > 0 ? `From $${Math.min(...p.denominations)}` : p.range ? `$${p.range.min}–$${p.range.max}` : 'Variable'}</p>
       </button>
     </div>
   )
@@ -525,19 +521,26 @@ function OrdersView({ orderId }: { orderId: string | null }) {
 
 export default function Home() {
   const { isConnected, address, status } = useAccount()
+  // A wallet extension that fails to restore its session can leave wagmi "reconnecting"
+  // indefinitely; only hold the screen for a moment, then show the normal UI.
+  const [reconnectTimedOut, setReconnectTimedOut] = useState(false)
+  useEffect(() => {
+    if (status !== 'reconnecting') { setReconnectTimedOut(false); return }
+    const t = setTimeout(() => setReconnectTimedOut(true), 3000)
+    return () => clearTimeout(t)
+  }, [status])
   const { authenticate } = useAuth()
   const prevAddress = useRef<string | undefined>(undefined)
   const [splashDone, setSplashDone] = useState(false)
   const [view, setView] = useState<View>('shop')
   const [activeTab, setActiveTab] = useState<Tab>('cards')
   const [browsing, setBrowsing] = useState(false)
-  const [cardBalance, setCardBalance] = useState<{ usdc: string } | null>(null)
+  const [cardBalance, setCardBalance] = useState<{ usdg: string } | null>(null)
   const [balanceOpen, setBalanceOpen] = useState(false)
   const [step, setStep] = useState<Step>('catalog')
   const [product, setProduct] = useState<Product | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
-  const [paymentAddress, setPaymentAddress] = useState('')
-  const [pendingPaymentAmount, setPendingPaymentAmount] = useState(0)
+  const [order, setOrder] = useState<OrderCreated | null>(null)
   const [balanceRefreshKey, setBalanceRefreshKey] = useState(0)
   const [email, setEmail] = useState('')
   const [search, setSearch] = useState('')
@@ -562,9 +565,9 @@ export default function Home() {
     getWalletBalances(address)
       .then((b) => {
         if (!cancelled) {
-          const raw = Number(b.usdc)
+          const raw = Number(b.usdg ?? 0)
           const net = b.simulated ? Math.max(0, raw - getSimSpent(address)) : raw
-          setCardBalance({ usdc: net.toFixed(2) })
+          setCardBalance({ usdg: net.toFixed(2) })
         }
       })
       .catch(() => { if (!cancelled) setCardBalance(null) })
@@ -581,8 +584,6 @@ export default function Home() {
     }
     prevAddress.current = address
 
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? ''
-
     const t = setTimeout(async () => {
       const localEmail = getStoredEmail(address)
       if (localEmail) {
@@ -595,16 +596,18 @@ export default function Home() {
       if (!token) return
 
       try {
-        const r = await fetch(`${backendUrl}/users/${address}`, {
+        const r = await fetch('/api/users/' + encodeURIComponent(address), {
           headers: { Authorization: `Bearer ${token}` },
         })
-        if (r.status === 404) {
-          setShowEmailModal(true)
-        } else if (r.ok) {
+        if (r.ok) {
           const u = await r.json()
-          const email = u.email ?? ''
-          setSavedEmail(email)
-          storeEmail(email, address)
+          if (u.user === null) {
+            setShowEmailModal(true)
+          } else {
+            const email = u.email ?? ''
+            setSavedEmail(email)
+            storeEmail(email, address)
+          }
         }
       } catch {}
     }, 500)
@@ -628,9 +631,8 @@ export default function Home() {
     setStep('catalog')
     setProduct(null)
     setOrderId(null)
-    setPaymentAddress('')
+    setOrder(null)
     setEmail('')
-    setPendingPaymentAmount(0)
   }
 
   function handleToggleSave(p: Product) {
@@ -697,7 +699,7 @@ export default function Home() {
         />
       )}
 
-      <div className="flex h-screen overflow-hidden bg-[--color-surface]">
+      <div className="app-shell flex h-screen overflow-hidden bg-[--color-surface]">
         <Sidebar
           active={view === 'shop' && !browsing ? null : view}
           onNavigate={handleNavigate}
@@ -725,26 +727,25 @@ export default function Home() {
           <div className="flex flex-1 overflow-hidden">
             {/* Main content */}
             <main className="flex-1 overflow-y-auto min-w-0">
-              {status === 'reconnecting' ? (
+              {status === 'reconnecting' && !reconnectTimedOut ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="w-6 h-6 rounded-full border-2 border-[#2b2bf5] border-t-transparent animate-spin" />
                 </div>
+              ) : view === 'assistant' ? (
+                <ShoppingAssistant walletAddress={address} savedEmail={savedEmail} />
               ) : !isConnected ? (
-                <div className="flex flex-col items-center justify-center h-full px-6 text-center">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5" style={{ backgroundColor: '#eef0ff' }}>
-                    <Store size={26} style={{ color: '#2b2bf5' }} />
-                  </div>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-2">Connect your wallet</h2>
-                  <p className="text-gray-400 text-xs max-w-xs leading-relaxed mb-6">
-                    200+ gift cards from top brands. Pay with USDC or $USDBT on Base.
-                    No KYC, no banks, delivered to your inbox.
+                <div className="connect-gate">
+                  <Store size={22} className="connect-gate-icon" />
+                  <h2>Connect a wallet to start shopping</h2>
+                  <p>
+                    Pick a gift card from {allProducts.length > 0 ? allProducts.length : 'hundreds of'} brands and pay in USDG or ETH.
+                    The code goes straight to your email. No KYC.
                   </p>
-                  <ConnectButton />
-                  <p className="text-[11px] text-gray-300 mt-4">No KYC · On Base · Instant delivery</p>
+                  <ConnectButton label="Connect wallet" />
                 </div>
               ) : view === 'shop' ? (
                 browsing ? (
-                  <div className="p-4 md:p-5">
+                  <div className="catalog-wrapper">
                     <CardCatalog
                       search={search}
                       selectedProduct={product}
@@ -755,10 +756,15 @@ export default function Home() {
                     />
                   </div>
                 ) : activeTab === 'cards' ? (
-                  <div className="p-4 md:p-8 flex flex-col items-center justify-center min-h-full">
+                  <div className="dashboard-view p-4 md:p-8 flex flex-col items-center justify-center min-h-full">
+                    <div className="dashboard-heading">
+                      <span>WALLET DASHBOARD</span>
+                      <h1>Your crypto, ready to spend.</h1>
+                      <p>One wallet for the digital things you love.</p>
+                    </div>
                     <VirtualCard
                       address={address}
-                      balanceUsdc={cardBalance?.usdc}
+                      balanceUsdg={cardBalance?.usdg}
                       onViewCatalog={() => { setBrowsing(true); setView('shop') }}
                       onViewOrders={() => handleNavigate('orders')}
                       onTopUp={() => setBalanceOpen(true)}
@@ -772,7 +778,7 @@ export default function Home() {
                   <div className="p-4 md:p-8 flex flex-col items-center justify-center min-h-full">
                     <VirtualCard
                       address={address}
-                      balanceUsdc={cardBalance?.usdc}
+                      balanceUsdg={cardBalance?.usdg}
                       onViewCatalog={() => { setBrowsing(true); setView('shop') }}
                       onViewOrders={() => handleNavigate('orders')}
                       onTopUp={() => setBalanceOpen(true)}
@@ -808,23 +814,22 @@ export default function Home() {
                       walletAddress={address!}
                       prefilledEmail={savedEmail || undefined}
                       onClose={reset}
-                      onOrder={(id, addr, mail, amt) => {
-                        setOrderId(id)
-                        setPaymentAddress(addr)
+                      onOrder={(created, mail) => {
+                        setOrderId(created.orderId)
+                        setOrder(created)
                         setEmail(mail)
-                        setPendingPaymentAmount(amt)
                         setStep('payment')
                       }}
                     />
                   )}
-                  {step === 'payment' && orderId && (
+                  {step === 'payment' && order && product && (
                     <PaymentScreen
-                      orderId={orderId}
-                      paymentAddress={paymentAddress}
+                      order={order}
+                      brandName={product.name}
                       email={email}
                       onSuccess={() => {
-                        if (address && pendingPaymentAmount > 0) {
-                          deductSimBalance(address, pendingPaymentAmount)
+                        if (address && order.paymentCurrency !== 'ETH' && order.paymentAmount > 0) {
+                          deductSimBalance(address, order.paymentAmount)
                           setBalanceRefreshKey((k) => k + 1)
                         }
                         setStep('success')

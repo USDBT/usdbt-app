@@ -51,10 +51,35 @@ function normalizeProduct(raw: any): Product {
   }
 }
 
+export type PaymentCurrency = 'USDG' | 'ETH'
+
+// Balances on Robinhood Chain (4663)
 export interface WalletBalances {
-  usdc: string
-  usdbt: string
+  usdg: string
+  eth: string
+  chainId?: number
   simulated?: boolean
+}
+
+export interface RelayOrderStepItem {
+  status: 'incomplete' | 'complete'
+  data: {
+    from?: string
+    to: string
+    data: string
+    value: string
+    chainId: number
+    maxFeePerGas?: string
+    maxPriorityFeePerGas?: string
+  }
+}
+
+export interface RelayOrderStep {
+  id: string
+  action: string
+  description: string
+  kind: 'transaction' | 'signature'
+  items: RelayOrderStepItem[]
 }
 
 export interface OrderCreated {
@@ -62,9 +87,12 @@ export interface OrderCreated {
   paymentAddress: string
   paymentAmount: number
   currency: string
+  paymentCurrency?: PaymentCurrency
+  chainId?: number
+  steps: RelayOrderStep[]
+  timeEstimate: number
   expiresAt: string
 }
-
 export interface OrderStatus {
   orderId: string
   status:
@@ -147,6 +175,7 @@ export async function createOrder(body: {
   faceValue: number
   email: string
   walletAddress: string
+  paymentCurrency?: PaymentCurrency
 }): Promise<OrderCreated> {
   const res = await fetch('/api/orders', {
     method: 'POST',

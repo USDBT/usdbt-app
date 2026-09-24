@@ -4,11 +4,12 @@ import Image from 'next/image'
 import {
   ShoppingBag, ScrollText, Bookmark, Users, Grid2X2, LayoutGrid,
   Settings, HelpCircle, Wallet, ChevronDown, ChevronRight, ChevronLeft, X,
-  ArrowDownToLine, Copy, Check, RefreshCw,
+  ArrowDownToLine, Copy, Check, RefreshCw, Sparkles,
 } from 'lucide-react'
 import { useState, useCallback, useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import { getWalletBalances } from '@/lib/api'
+import { formatAmount } from '@/lib/relay'
 import { getSimSpent } from '@/lib/auth'
 import type { DerivedCategory } from '@/lib/categories'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
@@ -16,27 +17,28 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import QRCode from 'react-qr-code'
 
-export type View = 'shop' | 'orders' | 'saved' | 'refer' | 'categories'
+export type View = 'shop' | 'assistant' | 'orders' | 'saved' | 'refer' | 'categories'
 
 const SPRING = { type: 'spring' as const, damping: 32, stiffness: 300 }
 
 const NAV: { id: View; label: string; icon: React.ElementType }[] = [
   { id: 'shop',       label: 'Shop',       icon: ShoppingBag },
+  { id: 'assistant',  label: 'Assistant', icon: Sparkles },
   { id: 'orders',     label: 'Orders',     icon: ScrollText  },
   { id: 'saved',      label: 'Saved',      icon: Bookmark    },
   { id: 'refer',      label: 'Refer',      icon: Users       },
   { id: 'categories', label: 'Categories', icon: Grid2X2     },
 ]
 
-type Balance = { usdc: string; usdbt: string }
+type Balance = { usdg: string; eth: string }
 type CachedBalance = Balance & { simulated?: boolean }
 const balanceCache = new Map<string, CachedBalance>()
 
 function applySimOffset(raw: CachedBalance, address: string): Balance {
   if (!raw.simulated) return raw
   const spent = getSimSpent(address)
-  const net = Math.max(0, parseFloat(raw.usdc) - spent)
-  return { usdc: net.toFixed(2), usdbt: raw.usdbt }
+  const net = Math.max(0, parseFloat(raw.usdg) - spent)
+  return { usdg: net.toFixed(2), eth: raw.eth }
 }
 
 function useWalletBalance(address?: string) {
@@ -180,15 +182,15 @@ function BalanceDrawer({ open, onClose, balance, loading, onReload }: {
                     <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-3">Balances</p>
                     <div className="space-y-2">
                       {[
-                        { label: 'USDC',   sub: 'USD Coin on Base',    value: balance?.usdc ?? '—' },
-                        { label: '$USDBT', sub: 'USDBT token on Base', value: balance?.usdbt ?? '—' },
+                        { label: 'USDG', sub: 'Global Dollar on Robinhood Chain', value: balance ? formatAmount(Number(balance.usdg), 'USDG') : '—' },
+                        { label: 'ETH',  sub: 'Ether on Robinhood Chain',         value: balance ? formatAmount(Number(balance.eth), 'ETH') : '—' },
                       ].map(({ label, sub, value }) => (
                         <div key={label} className="flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-gray-100">
                           <div>
                             <p className="text-sm font-semibold text-gray-800">{label}</p>
                             <p className="text-xs text-gray-400">{sub}</p>
                           </div>
-                          <p className={`text-sm font-medium ${loading ? 'text-gray-300 animate-pulse' : 'text-gray-600'}`}>{value}</p>
+                          <p className={`text-sm font-medium font-mono tabular ${loading ? 'text-gray-300 animate-pulse' : 'text-gray-600'}`}>{value}</p>
                         </div>
                       ))}
                     </div>
@@ -200,7 +202,7 @@ function BalanceDrawer({ open, onClose, balance, loading, onReload }: {
                       <p className="text-xs font-semibold" style={{ color: '#2b2bf5' }}>How to add funds</p>
                     </div>
                     <p className="text-xs text-gray-600 leading-relaxed">
-                      Send USDC to your wallet address above on the Base network.
+                      Send USDG or ETH to your wallet address above on Robinhood Chain. Funds sent on another network won't show here.
                     </p>
                   </div>
                 </>
@@ -261,7 +263,7 @@ function SidebarContent({
           className="flex items-center gap-2.5 rounded-lg hover:opacity-80 transition-opacity"
           title="Go to usdbt.us"
         >
-          <Image src="/logo.png" alt="USDBT" width={38} height={38} className="rounded-lg" />
+          <Image src="/logo.png" alt="USDBT" width={38} height={38} className="rounded-lg" priority />
           {!collapsed && <span className="font-bold text-[19px] text-gray-900 tracking-tight">USDBT</span>}
         </a>
         {onClose && !collapsed && (
@@ -279,13 +281,9 @@ function SidebarContent({
               onClick={() => handleNavClick(id)}
               whileTap={{ scale: 0.97 }}
               title={collapsed ? label : undefined}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${collapsed ? 'justify-center' : ''} ${
-                active === id
-                  ? 'bg-[--color-brand-light] text-[--color-brand] border border-[rgba(43,43,245,0.3)] shadow-[inset_4px_4px_10px_rgba(43,43,245,0.12),inset_-4px_-4px_10px_rgba(43,43,245,0.12)]'
-                  : 'text-gray-500 border border-transparent hover:bg-gray-50 hover:text-gray-800 hover:border-[rgba(43,43,245,0.15)] hover:shadow-[inset_4px_4px_10px_rgba(43,43,245,0.06),inset_-4px_-4px_10px_rgba(43,43,245,0.06)]'
-              }`}
+              className={`nav-item ${collapsed ? 'justify-center' : ''} ${active === id ? 'nav-item-active' : ''}`}
             >
-              <Icon size={15} className={active === id ? 'text-[--color-brand]' : 'text-gray-400'} />
+              <Icon size={16} />
               {!collapsed && <span className="flex-1 text-left">{label}</span>}
               {id === 'shop' && !collapsed && (
                 <motion.div
@@ -293,7 +291,7 @@ function SidebarContent({
                   transition={{ duration: 0.2 }}
                 >
                   <ChevronDown
-                    size={12}
+                    size={15}
                     className={active === id ? 'opacity-60' : 'text-gray-300'}
                   />
                 </motion.div>
@@ -313,9 +311,9 @@ function SidebarContent({
                     <motion.button
                       onClick={() => { onSubCategorySelect?.(null); onNavigate('shop'); onClose?.() }}
                       whileTap={{ scale: 0.96 }}
-                      className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-gray-500 border border-transparent hover:border-[rgba(43,43,245,0.2)] hover:shadow-[inset_3px_3px_8px_rgba(43,43,245,0.08),inset_-3px_-3px_8px_rgba(43,43,245,0.08)] hover:text-gray-700 transition-all"
+                      className="nav-item nav-sub"
                     >
-                      <LayoutGrid size={12} className="text-gray-400 flex-shrink-0" />
+                      <LayoutGrid size={16} />
                       All gift cards
                     </motion.button>
                     {categories.map(({ slug, label, icon: SubIcon }) => (
@@ -323,9 +321,9 @@ function SidebarContent({
                         key={slug}
                         onClick={() => { onSubCategorySelect?.(slug); onNavigate('shop'); onClose?.() }}
                         whileTap={{ scale: 0.96 }}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-gray-500 border border-transparent hover:border-[rgba(43,43,245,0.2)] hover:shadow-[inset_3px_3px_8px_rgba(43,43,245,0.08),inset_-3px_-3px_8px_rgba(43,43,245,0.08)] hover:text-gray-700 transition-all"
+                        className="nav-item nav-sub"
                       >
-                        <SubIcon size={12} className="text-gray-400 flex-shrink-0" />
+                        <SubIcon size={16} />
                         {label}
                       </motion.button>
                     ))}
@@ -343,18 +341,18 @@ function SidebarContent({
           onClick={() => { onSettingsClick?.(); onClose?.() }}
           whileTap={{ scale: 0.97 }}
           title={collapsed ? 'Settings' : undefined}
-          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors ${collapsed ? 'justify-center' : ''}`}
+          className={`nav-item ${collapsed ? 'justify-center' : ''}`}
         >
-          <Settings size={15} className="text-gray-400" />
+          <Settings size={18} />
           {!collapsed && 'Settings'}
         </motion.button>
         <motion.button
           onClick={() => { onHelpClick?.(); onClose?.() }}
           whileTap={{ scale: 0.97 }}
           title={collapsed ? 'Help' : undefined}
-          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors ${collapsed ? 'justify-center' : ''}`}
+          className={`nav-item ${collapsed ? 'justify-center' : ''}`}
         >
-          <HelpCircle size={15} className="text-gray-400" />
+          <HelpCircle size={18} />
           {!collapsed && 'Help'}
         </motion.button>
 
@@ -364,10 +362,10 @@ function SidebarContent({
             title="Balance"
             className="w-full mt-2 flex justify-center px-3 py-2 rounded-lg text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors"
           >
-            <Wallet size={15} className="text-gray-400" />
+            <Wallet size={18} className="text-gray-500" />
           </button>
         ) : (
-          <div className="mt-3 rounded-xl bg-white border border-[rgba(43,43,245,0.25)] shadow-[inset_5px_5px_12px_rgba(43,43,245,0.08),inset_-5px_-5px_12px_rgba(43,43,245,0.08)] hover:border-[rgba(43,43,245,0.5)] hover:shadow-[inset_7px_7px_16px_rgba(43,43,245,0.16),inset_-7px_-7px_16px_rgba(43,43,245,0.16)] transition-all overflow-hidden">
+          <div className="tile mt-3 overflow-hidden">
             <motion.button
               onClick={onBalanceClick}
               whileTap={{ scale: 0.98 }}
@@ -375,21 +373,21 @@ function SidebarContent({
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Wallet size={13} className="text-gray-400" />
-                  <span className="text-[12px] font-medium text-gray-500">Balance</span>
+                  <Wallet size={16} className="text-gray-500" />
+                  <span className="text-[14px] font-medium text-gray-700">Balance</span>
                 </div>
-                <ChevronRight size={12} className="text-gray-400" />
+                <ChevronRight size={15} className="text-gray-400" />
               </div>
-              <p className={`text-[11px] mt-0.5 ${balanceLoading ? 'text-gray-300 animate-pulse' : 'text-gray-400'}`}>
-                {balance ? `${balance.usdc} USDC` : '— USDC'}
+              <p className={`font-mono tabular text-[15px] font-semibold mt-0.5 ${balanceLoading ? 'text-gray-300 animate-pulse' : 'text-gray-900'}`}>
+                {balance ? formatAmount(Number(balance.usdg), 'USDG') : '— USDG'}
               </p>
             </motion.button>
             <div className="px-3 pb-2">
               <button
                 onClick={(e) => { e.stopPropagation(); onReloadBalance?.() }}
-                className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-[#2b2bf5] transition-colors"
+                className="flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-[--color-brand] transition-colors"
               >
-                <RefreshCw size={10} className={balanceLoading ? 'animate-spin' : ''} />
+                <RefreshCw size={13} className={balanceLoading ? 'animate-spin' : ''} />
                 Refresh
               </button>
             </div>
@@ -461,7 +459,7 @@ export function Sidebar({
 
       {/* Desktop sidebar */}
       <aside
-        className={`relative hidden md:flex flex-col flex-shrink-0 bg-white border-r border-gray-100 h-full transition-[width] duration-200 ${collapsed ? 'w-[68px]' : 'w-[190px]'}`}
+        className={`relative hidden md:flex flex-col flex-shrink-0 bg-white border-r border-gray-100 h-full transition-[width] duration-200 ${collapsed ? 'w-[72px]' : 'w-[248px]'}`}
       >
         <SidebarContent
           {...sharedProps}

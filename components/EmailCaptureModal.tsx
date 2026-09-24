@@ -20,7 +20,7 @@ export function EmailCaptureModal({ walletAddress, onSaved, onDismiss }: Props) 
     if (!email.trim()) return
     setLoading(true)
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? ''}/users`, {
+      const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders(walletAddress) },
         body: JSON.stringify({ walletAddress, email: email.trim() }),
@@ -62,27 +62,21 @@ export function EmailCaptureModal({ walletAddress, onSaved, onDismiss }: Props) 
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#2b2bf5] focus:ring-1 focus:ring-[#2b2bf5] transition-colors"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[--color-brand] focus:ring-4 focus:ring-[rgba(43,43,245,0.12)] transition-colors"
             />
             <button
               type="submit"
               disabled={loading || !email.trim()}
-              className="relative overflow-hidden w-full py-3 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ backgroundColor: '#2b2bf5' }}
-              onMouseEnter={(e) => {
-                const sweep = e.currentTarget.querySelector('.btn-shine') as HTMLElement
-                if (sweep) { sweep.style.animation = 'none'; sweep.offsetHeight; sweep.style.animation = '' }
-              }}
+              className="btn btn-primary btn-block"
             >
-              <div className="btn-shine card-shine-sweep" />
               {loading && <span className="loading-bar-spinner" aria-hidden="true" />}
-              {loading ? 'Saving…' : 'Save & Continue'}
+              {loading ? 'Saving…' : 'Save email'}
             </button>
           </form>
 
           <button
             onClick={onDismiss}
-            className="w-full mt-2 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            className="btn btn-ghost btn-sm btn-block mt-2"
           >
             Skip for now
           </button>

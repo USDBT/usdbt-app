@@ -108,9 +108,9 @@ export function CommandSearch({
                     key={p.id}
                     value={p.name}
                     onSelect={() => { onSelectProduct(p); onClose() }}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer text-sm text-gray-700 border border-[rgba(43,43,245,0.2)] bg-white shadow-[inset_4px_4px_8px_rgba(43,43,245,0.1),inset_-4px_-4px_8px_rgba(43,43,245,0.1)] aria-selected:border-[rgba(43,43,245,0.5)] aria-selected:shadow-[inset_5px_5px_12px_rgba(43,43,245,0.2),inset_-5px_-5px_12px_rgba(43,43,245,0.2)] aria-selected:bg-[#eef0ff] mb-1.5 transition-all"
+                    className="nav-item cursor-pointer text-sm mb-0.5 aria-selected:bg-[--color-brand-light] aria-selected:text-[--ink]"
                   >
-                    <div className="w-7 h-7 rounded-lg flex-shrink-0 overflow-hidden border border-[rgba(43,43,245,0.1)]">
+                    <div className="w-7 h-7 rounded-lg flex-shrink-0 overflow-hidden border border-[--line]">
                       <SearchThumb product={p} />
                     </div>
                     <span className="flex-1">{p.name}</span>
@@ -130,7 +130,7 @@ export function CommandSearch({
                   key={label}
                   value={label}
                   onSelect={onClose}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer text-sm text-gray-700 border border-[rgba(43,43,245,0.15)] bg-white shadow-[inset_4px_4px_8px_rgba(43,43,245,0.07),inset_-4px_-4px_8px_rgba(43,43,245,0.07)] aria-selected:border-[rgba(43,43,245,0.4)] aria-selected:shadow-[inset_5px_5px_12px_rgba(43,43,245,0.15),inset_-5px_-5px_12px_rgba(43,43,245,0.15)] aria-selected:bg-[#eef0ff] mb-1.5 transition-all"
+                  className="nav-item cursor-pointer text-sm mb-0.5 aria-selected:bg-[--color-brand-light] aria-selected:text-[--ink]"
                 >
                   <div className="w-7 h-7 rounded-lg bg-[#eef0ff] flex items-center justify-center flex-shrink-0">
                     <Icon size={13} style={{ color: '#2b2bf5' }} />

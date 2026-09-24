@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, MoreHorizontal, LayoutGrid, List, Bookmark } from 'lucide-react'
+import { Loader2, ChevronRight, LayoutGrid, List, Bookmark } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { fetchProducts, priceLabel, titleize, type Product } from '@/lib/api'
 import { labelForCategory } from '@/lib/categories'
@@ -102,7 +102,7 @@ function ProductThumb({ product, className }: { product: Product; className?: st
 }
 
 function ProductCard({
-  product, index, selected, isSaved, onSelect, onToggleSave,
+  product, selected, isSaved, onSelect, onToggleSave,
 }: {
   product: Product
   index: number
@@ -111,49 +111,29 @@ function ProductCard({
   onSelect: (p: Product) => void
   onToggleSave?: (p: Product) => void
 }) {
-  const [shineKey, setShineKey] = useState(0)
-
   return (
-    <div
-      className={`relative text-left p-3.5 rounded-xl border transition-all min-h-[130px] flex flex-col overflow-hidden ${
-        selected
-          ? 'border-[#2b2bf5] bg-[#eef0ff] shadow-[inset_6px_6px_14px_rgba(43,43,245,0.18),inset_-6px_-6px_14px_rgba(43,43,245,0.18)]'
-          : 'border-[rgba(43,43,245,0.3)] bg-white shadow-[inset_5px_5px_12px_rgba(43,43,245,0.18),inset_-5px_-5px_12px_rgba(43,43,245,0.18)] hover:border-[rgba(43,43,245,0.6)] hover:shadow-[inset_7px_7px_18px_rgba(43,43,245,0.32),inset_-7px_-7px_18px_rgba(43,43,245,0.32)]'
-      }`}
-      onMouseEnter={() => setShineKey((k) => k + 1)}
-    >
-      {/* Shine sweep */}
-      <div
-        key={shineKey}
-        className="card-shine-sweep"
-        style={{ '--shine-delay': shineKey === 0 ? `${index * 60}ms` : '0ms' } as React.CSSProperties}
-      />
-
+    <div className={`product-card tile relative flex flex-col ${selected ? 'tile-selected' : ''}`}>
       {onToggleSave && (
         <button
           onClick={(e) => { e.stopPropagation(); onToggleSave(product) }}
-          className="absolute top-2 right-2 p-1.5 rounded-lg bg-white/80 hover:bg-white shadow-sm transition-colors z-30"
-          aria-label={isSaved ? 'Unsave' : 'Save'}
+          className="product-save"
+          aria-label={isSaved ? `Remove ${product.name} from saved` : `Save ${product.name}`}
+          aria-pressed={isSaved}
         >
-          <Bookmark size={15} className={isSaved ? 'fill-[#2b2bf5] text-[#2b2bf5]' : 'text-gray-400'} />
+          <Bookmark size={14} className={isSaved ? 'fill-[--color-brand] text-[--color-brand]' : ''} />
         </button>
       )}
       <motion.button
         onClick={() => onSelect(product)}
-        whileTap={{ scale: 0.96 }}
-        className="flex flex-col flex-1 text-left w-full relative z-10"
+        whileTap={{ scale: 0.98 }}
+        className="flex flex-col flex-1 text-left w-full"
       >
-        <ProductThumb product={product} className="w-10 h-10 rounded-xl mb-3 overflow-hidden flex-shrink-0" />
-        <p className="text-sm font-medium text-gray-800 leading-tight line-clamp-2">{product.name}</p>
-        <p className="text-xs text-gray-400 mt-1">{categoryLabel(product)}</p>
-        <div className="mt-auto pt-2">
-          {(product.denominations.length > 0 || product.range) && (
-            <p className="text-xs font-medium text-gray-600">{priceLabel(product)}</p>
-          )}
-          <span className="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">
-            {brandType(product.denominations, product.range)}
-          </span>
-        </div>
+        <ProductThumb product={product} className="product-face" />
+        <p className="product-name line-clamp-2">{product.name}</p>
+        <p className="product-meta">{categoryLabel(product)}</p>
+        {(product.denominations.length > 0 || product.range) && (
+          <p className="product-price font-mono tabular">{priceLabel(product)}</p>
+        )}
       </motion.button>
     </div>
   )
@@ -163,8 +143,8 @@ const PAGE_SIZE = 24
 
 function SkeletonCard() {
   return (
-    <div className="relative p-3.5 rounded-xl border border-[rgba(43,43,245,0.15)] bg-white min-h-[130px] flex flex-col animate-pulse">
-      <div className="w-10 h-10 rounded-xl mb-3 bg-gray-100" />
+    <div className="product-card tile flex flex-col animate-pulse">
+      <div className="product-face bg-gray-100" />
       <div className="h-3 bg-gray-100 rounded w-3/4 mb-2" />
       <div className="h-2.5 bg-gray-100 rounded w-1/2 mb-auto" />
       <div className="mt-4 h-2.5 bg-gray-100 rounded w-1/3" />
@@ -255,30 +235,35 @@ export function CardCatalog({
   }
 
   return (
-    <div>
+    <div className="catalog-content">
+      <section className="catalog-intro" aria-labelledby="catalog-heading">
+        <div>
+          <span className="catalog-kicker">A better way to spend crypto</span>
+          <h1 id="catalog-heading">The things you love,<br className="hidden sm:block" /> ready when you are.</h1>
+          <p>Choose a gift card, pay with USDG or ETH on Robinhood Chain, and get your code delivered to your inbox.</p>
+        </div>
+        <div className="catalog-proof" aria-label="Marketplace details">
+          <div className="catalog-proof-item"><strong>{products.length}+</strong><span>gift cards</span></div>
+          <div className="catalog-proof-item"><strong>Minutes</strong><span>to delivery</span></div>
+          <div className="catalog-proof-item"><strong>Onchain</strong><span>checkout</span></div>
+        </div>
+      </section>
       {/* Quick Picks */}
       {!search && featured.length > 0 && (
-        <div className="bg-white rounded-xl p-5 mb-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-gray-800">Quick Picks</h2>
-            <button className="p-1 rounded-md hover:bg-gray-100 text-gray-300 transition-colors">
-              <MoreHorizontal size={16} />
-            </button>
-          </div>
-          <div className="grid grid-cols-4 gap-3">
+        <div className="catalog-section catalog-featured">
+          <h2 className="catalog-featured-title">Popular right now</h2>
+          <div className="catalog-featured-grid grid grid-cols-4 gap-3">
             {featured.slice(0, 4).map((p) => (
               <button
                 key={p.id}
                 onClick={() => onSelect(p)}
-                className={`flex flex-col items-start p-4 rounded-xl border transition-all text-left ${
-                  selectedProduct?.id === p.id
-                    ? 'border-[--color-brand] bg-[--color-brand-light]'
-                    : 'border-gray-100 hover:border-gray-300 hover:shadow-sm bg-white'
-                }`}
+                className={`tile flex items-center gap-3 p-3 text-left ${selectedProduct?.id === p.id ? 'tile-selected' : ''}`}
               >
-                <ProductThumb product={p} className="w-10 h-10 rounded-xl mb-3 flex items-center justify-center overflow-hidden" />
-                <p className="text-sm font-semibold text-gray-800 leading-tight">{p.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{priceLabel(p)}</p>
+                <ProductThumb product={p} className="product-face product-face-sm" />
+                <div className="min-w-0">
+                  <p className="product-name truncate">{p.name}</p>
+                  <p className="product-price font-mono tabular">{priceLabel(p)}</p>
+                </div>
               </button>
             ))}
           </div>
@@ -286,16 +271,16 @@ export function CardCatalog({
       )}
 
       {/* Brand listing */}
-      <div className="bg-white rounded-xl overflow-hidden shadow-[0_1px_3px_rgba(0,0,0,0.04)] border border-gray-100">
+      <div className="catalog-section catalog-listing bg-white rounded-xl overflow-hidden">
         {/* Controls row */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+        <div className="catalog-controls flex items-center justify-between px-5 py-3 border-b border-gray-100">
           <div className="flex items-center gap-1 text-sm">
             <span className="text-gray-400">All Cards</span>
             <span className="text-gray-300 mx-1">/</span>
             <span className="font-medium text-gray-700">{categoryFilter ? labelForCategory(categoryFilter) : 'Gift Cards'}</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-1 mr-1">
+            <div className="segment hidden md:inline-flex mr-1">
               {[
                 { id: 'all', label: 'All' },
                 { id: 'fixed', label: 'Fixed' },
@@ -304,11 +289,8 @@ export function CardCatalog({
                 <button
                   key={c.id}
                   onClick={() => setCategory(c.id as 'all' | 'fixed' | 'variable')}
-                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                    category === c.id
-                      ? 'bg-[--color-brand-light] border-[--color-brand] text-[--color-brand]'
-                      : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-                  }`}
+                  aria-pressed={category === c.id}
+                  className="segment-option"
                 >
                   {c.label}
                 </button>
@@ -316,14 +298,15 @@ export function CardCatalog({
             </div>
             <button
               onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400"
+              className="btn btn-ghost btn-sm px-2.5"
+              aria-label={viewMode === 'list' ? 'Show as grid' : 'Show as list'}
             >
               {viewMode === 'list' ? <LayoutGrid size={15} /> : <List size={15} />}
             </button>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'name_asc' | 'name_desc')}
-              className="text-xs text-gray-500 border border-gray-200 rounded-lg px-3 py-1.5 bg-white hover:bg-gray-50 transition-colors outline-none"
+              className="select-control"
             >
               <option value="name_asc">Sort: A → Z</option>
               <option value="name_desc">Sort: Z → A</option>
@@ -377,6 +360,7 @@ export function CardCatalog({
                           <button
                             onClick={(e) => { e.stopPropagation(); onToggleSave(p) }}
                             className="p-1 rounded-md text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+                            aria-label={isSaved ? `Remove ${p.name} from saved` : `Save ${p.name}`}
                           >
                             <Bookmark size={14} className={isSaved ? 'fill-[#2b2bf5] text-[#2b2bf5]' : ''} />
                           </button>
@@ -384,8 +368,9 @@ export function CardCatalog({
                         <button
                           onClick={(e) => { e.stopPropagation(); onSelect(p) }}
                           className="p-1 rounded-md text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+                          aria-label={`Buy ${p.name}`}
                         >
-                          <MoreHorizontal size={15} />
+                          <ChevronRight size={15} />
                         </button>
                       </div>
                     </td>
@@ -402,7 +387,7 @@ export function CardCatalog({
             </tbody>
           </table>
         ) : (
-          <div className="p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className="product-grid p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
             {visible.map((p, i) => {
               const isSaved = savedIds?.has(p.id) ?? false
               return (
@@ -429,6 +414,7 @@ export function CardCatalog({
         <div className="px-5 py-3 border-t border-gray-100">
           <p className="text-xs text-gray-400">{filtered.length} cards</p>
         </div>
+        <div className="catalog-attribution">Icons by <a href="https://icons8.com/icons/set/gift-card" target="_blank" rel="noopener noreferrer">Icons8</a></div>
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 'use client'
 
-import { X, Globe, Shield, Moon, Bell } from 'lucide-react'
+import { X, Globe, Shield, Moon, Bell, Wallet, CreditCard } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
@@ -110,7 +110,7 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
                   >
                     <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src="/usdc_logo.png" alt="Wallet" className="w-5 h-5 rounded-full object-contain" />
+                      <Wallet size={15} className="text-gray-500" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800">Connected Wallet</p>
@@ -121,7 +121,7 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
                   </motion.button>
 
                   <motion.button
-                    onClick={() => copy('Base Mainnet', 'Network')}
+                    onClick={() => copy('Robinhood Chain', 'Network')}
                     whileTap={{ scale: 0.99 }}
                     className="w-full flex items-center gap-3 py-3 px-4 hover:bg-gray-50 transition-colors text-left"
                   >
@@ -130,7 +130,7 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800">Network</p>
-                      <p className="text-xs text-gray-400">Base Mainnet</p>
+                      <p className="text-xs text-gray-400">Robinhood Chain</p>
                     </div>
                   </motion.button>
 
@@ -182,13 +182,13 @@ export function SettingsDrawer({ open, onClose }: { open: boolean; onClose: () =
                   <div className="flex items-center gap-3 py-3 px-4">
                     <div className="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src="/usdc_logo.png" alt="USDC" className="w-6 h-6 rounded-full object-contain" />
+                      <CreditCard size={15} className="text-gray-500" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800">Default Currency</p>
-                      <p className="text-xs text-gray-400">USDC on Base</p>
+                      <p className="text-sm font-medium text-gray-800">Payment currencies</p>
+                      <p className="text-xs text-gray-400">Chosen at checkout</p>
                     </div>
-                    <span className="text-xs text-gray-500 font-medium flex-shrink-0">USDC</span>
+                    <span className="text-xs text-gray-500 font-medium flex-shrink-0">USDG · ETH</span>
                   </div>
                 </div>
               </div>

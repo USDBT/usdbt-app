@@ -52,7 +52,7 @@ export function Header({
   }
 
   return (
-    <header className="h-[60px] flex items-center px-4 bg-white border-b border-gray-100 gap-3 flex-shrink-0 relative">
+    <header className="h-[64px] flex items-center px-6 bg-white border-b border-gray-100 gap-4 flex-shrink-0 relative">
       {/* Hamburger — mobile only */}
       <button
         onClick={onHamburgerClick}
@@ -67,14 +67,10 @@ export function Header({
           <button
             key={id}
             onClick={() => onTabChange(id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              activeTab === id
-                ? 'text-white'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-            }`}
-            style={activeTab === id ? { backgroundColor: '#2b2bf5' } : undefined}
+            aria-current={activeTab === id ? 'page' : undefined}
+            className={`header-tab ${activeTab === id ? 'header-tab-active' : ''}`}
           >
-            <Icon size={14} />
+            <Icon size={17} />
             <span className="hidden md:inline">{label}</span>
           </button>
         ))}
@@ -84,7 +80,7 @@ export function Header({
       <div className="ml-auto flex items-center gap-2">
         {/* Desktop search */}
         <div className="hidden md:block relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             type="text"
             placeholder="Search… (⌘K)"
@@ -92,7 +88,7 @@ export function Header({
             onChange={(e) => onSearch(e.target.value)}
             onFocus={() => { onOpenSearch?.() }}
             readOnly={!!onOpenSearch}
-            className="pl-9 pr-4 py-2 text-sm bg-gray-100 rounded-xl outline-none w-44 focus:bg-white transition-all cursor-pointer"
+            className="pl-9 pr-4 h-10 text-[15px] bg-gray-100 rounded-xl outline-none w-52 focus:bg-white transition-all cursor-pointer"
           />
         </div>
 
@@ -101,7 +97,7 @@ export function Header({
           onClick={onOpenSearch}
           className="md:hidden p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-400"
         >
-          <Search size={17} />
+          <Search size={19} />
         </button>
 
         {/* Notifications */}
@@ -110,7 +106,7 @@ export function Header({
             onClick={() => setNotifOpen(o => !o)}
             className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-400"
           >
-            <Bell size={17} />
+            <Bell size={19} />
           </button>
 
           {notifOpen && (
@@ -150,8 +146,7 @@ export function Header({
                     {perm !== 'denied' && (
                       <button
                         onClick={enableNotifications}
-                        className="mt-1 px-4 py-2 rounded-xl text-white text-xs font-semibold transition-colors"
-                        style={{ backgroundColor: '#2b2bf5' }}
+                        className="btn btn-primary btn-sm mt-1"
                       >
                         Enable notifications
                       </button>

@@ -32,9 +32,9 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center gap-6">
       <div className="flex flex-col items-center gap-3">
-        <Image src="/logo.png" alt="$USDBT" width={52} height={52} className="rounded-2xl shadow-sm" />
+        <Image src="/logo.png" alt="$USDBT" width={52} height={52} className="rounded-2xl shadow-sm" priority />
         <p className="text-[17px] font-semibold text-gray-900 tracking-tight">$USDBT</p>
-        <p className="text-xs text-gray-400">Gift cards on Base</p>
+        <p className="text-xs text-gray-400">Gift cards on Robinhood Chain</p>
       </div>
       <div className="w-40 h-[3px] bg-gray-100 rounded-full overflow-hidden">
         <div

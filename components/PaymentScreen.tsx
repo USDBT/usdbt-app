@@ -1,44 +1,48 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import QRCode from 'react-qr-code'
-import { Copy, Check, Loader2, Clock } from 'lucide-react'
-import { getOrderStatus, type OrderStatus } from '@/lib/api'
+import { Loader2, Clock, Wallet, AlertCircle } from 'lucide-react'
+import { getOrderStatus, type OrderCreated, type OrderStatus } from '@/lib/api'
+import { formatAmount, useRelayPayment } from '@/lib/relay'
 
 const POLL_INTERVAL = 5_000
+const PAID_STATUSES: OrderStatus['status'][] = ['user_debited', 'hot_wallet_funded', 'bitrefill_processing', 'delivered']
+
+type Phase = 'ready' | 'paying' | 'submitted'
 
 export function PaymentScreen({
-  orderId,
-  paymentAddress,
+  order,
+  brandName,
   email,
   onSuccess,
 }: {
-  orderId: string
-  paymentAddress: string
+  order: OrderCreated
+  brandName: string
   email: string
   onSuccess: () => void
 }) {
-  const [order, setOrder] = useState<OrderStatus | null>(null)
-  const [copied, setCopied] = useState(false)
+  const payWithRelay = useRelayPayment()
+  const [status, setStatus] = useState<OrderStatus | null>(null)
+  const [phase, setPhase] = useState<Phase>('ready')
+  const [stepNote, setStepNote] = useState('')
   const [timeLeft, setTimeLeft] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const currency = order.paymentCurrency ?? 'USDG'
+  const expiresAt = status?.expiresAt ?? order.expiresAt
+  const expired = timeLeft === 'Expired'
 
   const poll = useCallback(async () => {
     try {
-      const status = await getOrderStatus(orderId)
-      setOrder(status)
-      if (
-        status.status === 'user_debited' ||
-        status.status === 'hot_wallet_funded' ||
-        status.status === 'bitrefill_processing' ||
-        status.status === 'delivered'
-      ) {
-        onSuccess()
+      const s = await getOrderStatus(order.orderId)
+      setStatus(s)
+      if (PAID_STATUSES.includes(s.status)) onSuccess()
+      if (s.status === 'failed' || s.status === 'refunded') {
+        setError(s.failureReason || (s.status === 'refunded' ? 'This order was refunded.' : 'This order failed.'))
       }
     } catch {
-      setError('Could not reach server. Retrying…')
+      // Keep polling; a missed poll is not an error the user can act on.
     }
-  }, [orderId, onSuccess])
+  }, [order.orderId, onSuccess])
 
   useEffect(() => {
     poll()
@@ -47,9 +51,9 @@ export function PaymentScreen({
   }, [poll])
 
   useEffect(() => {
-    if (!order?.expiresAt) return
+    if (!expiresAt) return
     const tick = () => {
-      const diff = new Date(order.expiresAt).getTime() - Date.now()
+      const diff = new Date(expiresAt).getTime() - Date.now()
       if (diff <= 0) { setTimeLeft('Expired'); return }
       const m = Math.floor(diff / 60000)
       const s = Math.floor((diff % 60000) / 1000)
@@ -58,99 +62,91 @@ export function PaymentScreen({
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [order?.expiresAt])
+  }, [expiresAt])
 
-  function copyAddress() {
-    navigator.clipboard.writeText(paymentAddress)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  async function pay() {
+    setError(null)
+    setPhase('paying')
+    try {
+      await payWithRelay(order, setStepNote)
+      setPhase('submitted')
+      poll()
+    } catch (err) {
+      setPhase('ready')
+      const message = err instanceof Error ? err.message : 'Payment could not be completed.'
+      // Wallets report a rejected prompt as a long technical error; keep the first line.
+      setError(/rejected|denied/i.test(message) ? 'You declined the request in your wallet. Try again when ready.' : message.split('\n')[0])
+    }
   }
-
-  if (!order) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 size={20} className="animate-spin text-gray-300" />
-      </div>
-    )
-  }
-
-  const statusMap: Record<string, string> = {
-    pending_payment: 'Waiting for payment…',
-    user_debited: 'Payment detected · preparing your card…',
-    hot_wallet_funded: 'Funding hot wallet…',
-    bitrefill_processing: 'Issuing card with provider…',
-    delivered: 'Card delivered!',
-    failed: 'Order failed',
-    refunded: 'Order refunded',
-  }
-
-  const isConfirming = ['user_debited', 'hot_wallet_funded', 'bitrefill_processing'].includes(order.status)
 
   return (
     <div className="flex flex-col h-full">
-      {/* Panel header */}
       <div className="px-5 py-4 border-b border-[--color-surface-2]">
-        <p className="text-[11px] text-gray-400 mb-0.5 uppercase tracking-wide">Send payment</p>
-        <h2 className="font-semibold text-gray-900 text-sm">
-          {order.brandName} · ${order.faceValue}
+        <p className="text-[12px] text-gray-500 mb-0.5">Pay for your card</p>
+        <h2 className="font-semibold text-gray-900 text-base">
+          {status?.brandName ?? brandName}{status ? ` · $${status.faceValue}` : ''}
         </h2>
       </div>
 
-      {/* Panel body */}
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
-        {/* Amount chip */}
-        <div className="flex items-center justify-between bg-[--color-brand] text-white rounded-xl px-4 py-3">
+        <div className="flex items-center justify-between bg-[--color-brand] text-white rounded-xl px-4 py-3.5">
           <div>
-            <p className="text-[10px] opacity-70 mb-0.5">Exact amount</p>
-            <p className="text-lg font-bold">${order.paymentAmount} USDC</p>
+            <p className="text-[12px] opacity-75 mb-0.5">You pay</p>
+            <p className="text-xl font-semibold font-mono tabular">{formatAmount(order.paymentAmount, currency)}</p>
           </div>
-          <div className="text-right">
-            <p className="text-[10px] opacity-70 mb-0.5">Expires in</p>
-            <div className="flex items-center gap-1 text-xs font-medium">
-              <Clock size={11} />
-              {timeLeft}
+          {timeLeft && (
+            <div className="text-right">
+              <p className="text-[12px] opacity-75 mb-0.5">Expires in</p>
+              <div className="flex items-center justify-end gap-1 text-sm font-medium font-mono tabular">
+                <Clock size={13} />
+                {timeLeft}
+              </div>
             </div>
+          )}
+        </div>
+
+        <dl className="rounded-xl border border-[--line] divide-y divide-[--line] text-sm">
+          <div className="flex justify-between px-4 py-2.5"><dt className="text-gray-500">Network</dt><dd className="text-gray-800 font-medium">Robinhood Chain</dd></div>
+          <div className="flex justify-between px-4 py-2.5"><dt className="text-gray-500">Card sent to</dt><dd className="text-gray-800 font-medium truncate ml-4">{email}</dd></div>
+          {order.timeEstimate > 0 && (
+            <div className="flex justify-between px-4 py-2.5"><dt className="text-gray-500">Settles in</dt><dd className="text-gray-800 font-medium">about {order.timeEstimate}s</dd></div>
+          )}
+        </dl>
+
+        {phase === 'paying' && (
+          <div className="flex items-start gap-2 text-sm text-gray-600">
+            <Loader2 size={16} className="animate-spin text-[--color-brand] mt-0.5 flex-shrink-0" />
+            <span>{stepNote || 'Opening your wallet…'}</span>
           </div>
-        </div>
-
-        {/* QR */}
-        <div className="flex justify-center">
-          <div className="bg-white p-3.5 rounded-2xl border border-[--color-surface-2] shadow-sm">
-            <QRCode value={paymentAddress} size={160} />
+        )}
+        {phase === 'submitted' && (
+          <div className="flex items-start gap-2 text-sm text-gray-600">
+            <Loader2 size={16} className="animate-spin text-[--color-brand] mt-0.5 flex-shrink-0" />
+            <span>Payment sent. Waiting for it to confirm…</span>
           </div>
-        </div>
-
-        {/* Address */}
-        <div className="bg-[--color-surface] rounded-xl p-3.5">
-          <p className="text-[10px] text-gray-400 mb-1.5 uppercase tracking-wide">Base network address</p>
-          <div className="flex items-start gap-2">
-            <code className="text-[11px] font-mono text-gray-700 flex-1 break-all leading-relaxed">
-              {paymentAddress}
-            </code>
-            <button
-              onClick={copyAddress}
-              className="shrink-0 p-1.5 rounded-lg hover:bg-[--color-surface-2] transition-colors text-gray-400"
-            >
-              {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
-            </button>
+        )}
+        {error && (
+          <div className="flex items-start gap-2 rounded-xl bg-red-50 px-3.5 py-3 text-sm text-red-700">
+            <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+            <span>{error}</span>
           </div>
-        </div>
+        )}
 
-        {/* Status */}
-        <div className="flex items-center gap-2 text-xs text-gray-500 py-1">
-          <Loader2
-            size={13}
-            className={`animate-spin ${isConfirming ? 'text-[--color-brand]' : 'text-gray-300'}`}
-          />
-          {statusMap[order.status] ?? order.status}
-        </div>
-
-        {error && <p className="text-[11px] text-red-400">{error}</p>}
-
-        <p className="text-[11px] text-gray-400 leading-relaxed">
-          Send from the wallet you connected. We match payments by sender address.
-          Card for <span className="text-gray-600">{email}</span>.
+        <p className="text-[12px] text-gray-500 leading-relaxed">
+          Your wallet will ask you to approve {order.steps?.length > 1 ? 'a few transactions' : 'a transaction'} on Robinhood Chain.
+          It switches networks for you if needed.
         </p>
+      </div>
+
+      <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0">
+        <button
+          onClick={pay}
+          disabled={phase !== 'ready' || expired || status?.status === 'failed' || status?.status === 'refunded'}
+          className="btn btn-primary btn-block"
+        >
+          {phase === 'ready' ? <Wallet size={16} /> : <span className="loading-bar-spinner" aria-hidden="true" />}
+          {expired ? 'Order expired' : phase === 'ready' ? `Pay ${formatAmount(order.paymentAmount, currency)}` : phase === 'paying' ? 'Confirm in your wallet' : 'Confirming payment…'}
+        </button>
       </div>
     </div>
   )

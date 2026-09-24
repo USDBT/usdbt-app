@@ -8,11 +8,11 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 const SPRING = { type: 'spring' as const, damping: 32, stiffness: 300 }
 
 const FAQ = [
-  { q: 'How do I buy a gift card?', a: 'Connect your wallet, pick a card, enter your email, and send USDC to the payment address. Your card code arrives in your inbox within minutes.' },
-  { q: 'Which wallets are supported?', a: 'Any wallet that works on Base — MetaMask, Coinbase Wallet, Rainbow, and 100+ others via WalletConnect.' },
+  { q: 'How do I buy a gift card?', a: 'Connect your wallet, pick a card, enter your email, choose USDG or ETH, and approve the payment in your wallet. Your card code arrives in your inbox within minutes.' },
+  { q: 'Which wallets are supported?', a: 'Any EVM wallet that can connect to Robinhood Chain: MetaMask, Rainbow, and 100+ others via WalletConnect. The app adds and switches to the network for you.' },
   { q: 'Do I need KYC?', a: 'No. We never ask for ID, email verification, or any personal information beyond the delivery email for your card.' },
-  { q: "What if my payment isn't detected?", a: 'Payments are monitored every 15 seconds. If 30+ minutes pass with no detection, reach out via Telegram. Always send from the wallet you connected.' },
-  { q: 'Which network do I pay on?', a: 'Base mainnet only. Do not send from Ethereum mainnet or other chains — funds sent to the wrong network cannot be recovered.' },
+  { q: "What if my payment isn't detected?", a: 'Payments usually confirm within seconds of your wallet approving them. If 30+ minutes pass with no confirmation, reach out via Telegram with your order ID.' },
+  { q: 'Which network do I pay on?', a: 'Robinhood Chain. You pay in USDG or ETH held on Robinhood Chain, and your wallet signs the payment directly, so there is no address to copy.' },
   { q: 'Can I get a refund?', a: 'Once a card is delivered it cannot be refunded. If payment was sent but no card received within 1 hour, contact support.' },
 ]
 

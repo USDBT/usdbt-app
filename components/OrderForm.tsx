@@ -7,7 +7,8 @@ import {
   Tag, FolderOpen, Globe, Zap, ShieldCheck,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { createOrder, fetchProductDetail, getWalletBalances, priceLabel, titleize, type Product } from '@/lib/api'
+import { createOrder, fetchProductDetail, getWalletBalances, priceLabel, titleize, type OrderCreated, type PaymentCurrency, type Product } from '@/lib/api'
+import { formatAmount } from '@/lib/relay'
 import { getSimSpent } from '@/lib/auth'
 
 function SectionLabel({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
@@ -30,7 +31,7 @@ export function OrderForm({
   walletAddress: string
   prefilledEmail?: string
   onClose: () => void
-  onOrder: (orderId: string, paymentAddress: string, email: string, paymentAmount: number) => void
+  onOrder: (order: OrderCreated, email: string) => void
 }) {
   const [resolvedProduct, setResolvedProduct] = useState(product)
   const [coinAmounts, setCoinAmounts] = useState<Record<number, number>>({})
@@ -43,7 +44,8 @@ export function OrderForm({
   const [activeTab, setActiveTab] = useState<'order' | 'details'>('order')
   const [loading, setLoading] = useState(false)
   const [balancesLoading, setBalancesLoading] = useState(false)
-  const [usdcBalance, setUsdcBalance] = useState<number | null>(null)
+  const [currency, setCurrency] = useState<PaymentCurrency>('USDG')
+  const [balances, setBalances] = useState<{ USDG: number; ETH: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showUsdbtModal, setShowUsdbtModal] = useState(false)
 
@@ -75,11 +77,14 @@ export function OrderForm({
   )
 
   const selectedValue = p.range ? parseFloat(customValue) || 0 : parseFloat(fixedInput) || 0
-  const exactUsdc = coinAmounts[selectedValue] ?? null
+  // coinAmounts are stablecoin quotes; USDG tracks USD, so they only apply to USDG
+  const exactUsdg = currency === 'USDG' ? (coinAmounts[selectedValue] ?? null) : null
   const inRange = p.range ? selectedValue >= p.range.min && selectedValue <= p.range.max : true
   const emailValid = email.includes('@')
   // carousel selection always produces a valid denomination; stepper can't go out of range
-  const hasEnoughBalance = usdcBalance === null ? true : usdcBalance >= (exactUsdc ?? selectedValue)
+  // ETH needs a live quote to compare against, so only USDG is checked before ordering
+  const walletBalance = balances ? balances[currency] : null
+  const hasEnoughBalance = currency !== 'USDG' || walletBalance === null ? true : walletBalance >= (exactUsdg ?? selectedValue)
 
   const valid = !detailLoading && !detailError && selectedValue > 0 && emailValid && inRange && hasEnoughBalance
 
@@ -91,12 +96,14 @@ export function OrderForm({
       try {
         const data = await getWalletBalances(walletAddress)
         if (!cancelled) {
-          const raw = Number(data.usdc)
-          const net = data.simulated ? Math.max(0, raw - getSimSpent(walletAddress)) : raw
-          setUsdcBalance(net)
+          const usdg = Number(data.usdg ?? 0)
+          setBalances({
+            USDG: data.simulated ? Math.max(0, usdg - getSimSpent(walletAddress)) : usdg,
+            ETH: Number(data.eth ?? 0),
+          })
         }
       } catch {
-        if (!cancelled) setUsdcBalance(null)
+        if (!cancelled) setBalances(null)
       } finally {
         if (!cancelled) setBalancesLoading(false)
       }
@@ -129,8 +136,9 @@ function stepVariable(dir: 1 | -1) {
         faceValue: selectedValue,
         email,
         walletAddress,
+        paymentCurrency: currency,
       })
-      onOrder(order.orderId, order.paymentAddress, email, order.paymentAmount)
+      onOrder(order, email)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'something went wrong')
     } finally {
@@ -256,16 +264,12 @@ function stepVariable(dir: 1 | -1) {
                         key={d}
                         type="button"
                         onClick={() => setFixedInput(String(d))}
-                        className={`flex-shrink-0 snap-start flex flex-col items-center px-4 py-2.5 rounded-xl border-2 transition-all ${
-                          selected
-                            ? 'border-[#2b2bf5] bg-[#2b2bf5] text-white shadow-[inset_4px_4px_8px_rgba(255,255,255,0.12),inset_-4px_-4px_8px_rgba(255,255,255,0.12)]'
-                            : 'border-[rgba(43,43,245,0.2)] bg-white text-gray-700 hover:border-[#2b2bf5]/60'
-                        }`}
+                        className={`tile flex-shrink-0 snap-start flex flex-col items-center px-4 py-2.5 ${selected ? 'tile-selected text-[--color-brand]' : 'text-[--ink]'}`}
                       >
-                        <span className="text-sm font-bold">${d}</span>
-                        {coinAmounts[d] && (
-                          <span className={`text-[10px] mt-0.5 ${selected ? 'text-white/70' : 'text-gray-400'}`}>
-                            {coinAmounts[d].toFixed(2)} USDC
+                        <span className="font-mono tabular text-sm font-semibold">${d}</span>
+                        {currency === 'USDG' && coinAmounts[d] && (
+                          <span className={`text-[10px] mt-0.5 text-gray-400 font-mono tabular`}>
+                            {coinAmounts[d].toFixed(2)} USDG
                           </span>
                         )}
                       </button>
@@ -275,8 +279,8 @@ function stepVariable(dir: 1 | -1) {
               ) : p.range ? (
                 /* Range stepper */
                 <div className="flex items-stretch gap-2">
-                  <button type="button" onClick={() => stepVariable(-1)}
-                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all">
+                  <button type="button" onClick={() => stepVariable(-1)} aria-label="Decrease amount"
+                    className="btn btn-secondary btn-icon flex-shrink-0">
                     <Minus size={16} />
                   </button>
                   <div className="flex-1 relative">
@@ -285,11 +289,11 @@ function stepVariable(dir: 1 | -1) {
                       type="number" min={p.range.min} max={p.range.max} step={p.range.step}
                       value={customValue} onChange={(e) => setCustomValue(e.target.value)}
                       placeholder={String(p.range.min)}
-                      className="w-full h-12 pl-7 pr-3 text-center text-base font-semibold border-2 border-gray-200 rounded-xl outline-none focus:border-[#2b2bf5] bg-gray-50 focus:bg-white transition-colors"
+                      className="w-full h-12 pl-7 pr-3 text-center font-mono tabular text-base font-semibold border border-[--line] rounded-xl outline-none focus:border-[--color-brand] focus:ring-4 focus:ring-[rgba(43,43,245,0.12)] bg-white transition-colors"
                     />
                   </div>
-                  <button type="button" onClick={() => stepVariable(1)}
-                    className="flex-shrink-0 w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-400 hover:bg-gray-50 active:scale-95 transition-all">
+                  <button type="button" onClick={() => stepVariable(1)} aria-label="Increase amount"
+                    className="btn btn-secondary btn-icon flex-shrink-0">
                     <Plus size={16} />
                   </button>
                 </div>
@@ -304,32 +308,37 @@ function stepVariable(dir: 1 | -1) {
             {/* Pay with */}
             <div>
               <SectionLabel icon={CreditCard} text="Pay with" />
-              <div className="space-y-2">
-                <button className="flex items-center gap-2.5 border-2 border-[--color-brand] rounded-xl px-4 py-2.5 bg-[--color-brand-light] w-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/usdc_logo.png" alt="USDC" className="w-5 h-5 rounded-full object-contain flex-shrink-0" />
-                  <span className="text-sm font-semibold text-[--color-brand]">USDC</span>
-                  <Check size={14} className="text-[--color-brand] ml-auto" />
-                </button>
-                {/* USDBT — coming soon */}
-                <button
-                  type="button"
-                  onClick={() => setShowUsdbtModal(true)}
-                  className="relative w-full"
-                >
-                  <div className="flex items-center gap-2.5 border-2 border-gray-200 rounded-xl px-4 py-2.5 bg-gray-50 w-full blur-[2px] select-none">
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#2b2bf5' }}>
-                      <span className="text-white text-[9px] font-bold">$</span>
-                    </div>
-                    <span className="text-sm font-semibold text-gray-600">$USDBT</span>
-                  </div>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[10px] font-semibold text-gray-500 bg-white/90 px-2.5 py-1 rounded-full border border-gray-200 shadow-sm">
-                      Coming soon
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Payment currency">
+                {([
+                  { id: 'USDG', name: 'USDG', sub: 'Global Dollar' },
+                  { id: 'ETH', name: 'ETH', sub: 'Ether' },
+                ] as const).map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={currency === c.id}
+                    onClick={() => setCurrency(c.id)}
+                    className={`tile flex flex-col items-start px-3.5 py-2.5 text-left ${currency === c.id ? 'tile-selected' : ''}`}
+                  >
+                    <span className="flex items-center gap-1.5 w-full">
+                      <span className={`text-sm font-semibold ${currency === c.id ? 'text-[--color-brand]' : 'text-[--ink]'}`}>{c.name}</span>
+                      {currency === c.id && <Check size={14} className="text-[--color-brand] ml-auto" />}
                     </span>
-                  </div>
-                </button>
+                    <span className="text-[12px] text-gray-500 font-mono tabular mt-0.5">
+                      {balances ? formatAmount(balances[c.id], c.id) : c.sub}
+                    </span>
+                  </button>
+                ))}
               </div>
+              <p className="text-[12px] text-gray-500 mt-2">Paid on Robinhood Chain from your connected wallet.</p>
+              <button
+                type="button"
+                onClick={() => setShowUsdbtModal(true)}
+                className="mt-2 text-[12px] text-gray-500 underline underline-offset-2 hover:text-gray-700"
+              >
+                Paying with $USDBT is coming soon
+              </button>
             </div>
 
             <div className="border-t border-gray-100" />
@@ -362,24 +371,27 @@ function stepVariable(dir: 1 | -1) {
             </div>
 
             {/* Price summary — only show when a valid denomination is selected */}
-            {selectedValue > 0 && (exactUsdc !== null || p.range) && (
+            {selectedValue > 0 && (
               <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
                 <div className="flex items-center justify-between text-sm text-gray-500">
                   <span>Card value</span><span>${selectedValue}</span>
                 </div>
-                {exactUsdc !== null && (
+                {exactUsdg !== null && (
                   <div className="flex items-center justify-between text-sm font-semibold text-gray-800">
-                    <span>You send</span><span>${exactUsdc.toFixed(2)} USDC</span>
+                    <span>You send</span><span className="font-mono tabular">{formatAmount(exactUsdg, 'USDG')}</span>
                   </div>
+                )}
+                {currency === 'ETH' && (
+                  <p className="text-xs text-gray-500">The exact ETH amount is quoted on the next step.</p>
                 )}
                 <div className={`text-xs pt-0.5 ${hasEnoughBalance ? 'text-emerald-600' : 'text-red-500'}`}>
                   {balancesLoading
                     ? 'Checking wallet balance…'
-                    : usdcBalance === null
+                    : walletBalance === null || currency !== 'USDG'
                       ? ''
                       : hasEnoughBalance
-                        ? `${usdcBalance.toFixed(2)} USDC available ✓`
-                        : `Insufficient — you have ${usdcBalance.toFixed(2)} USDC`}
+                        ? `${formatAmount(walletBalance, 'USDG')} available`
+                        : `Not enough USDG. You have ${formatAmount(walletBalance, 'USDG')}.`}
                 </div>
               </div>
             )}
@@ -407,14 +419,8 @@ function stepVariable(dir: 1 | -1) {
           <button
             onClick={submit}
             disabled={!valid || loading}
-            className="relative overflow-hidden w-full py-3 text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-            style={{ backgroundColor: '#2b2bf5' }}
-            onMouseEnter={(e) => {
-              const sweep = e.currentTarget.querySelector('.btn-shine') as HTMLElement
-              if (sweep) { sweep.style.animation = 'none'; sweep.offsetHeight; sweep.style.animation = '' }
-            }}
+            className="btn btn-primary btn-block"
           >
-            <div className="btn-shine card-shine-sweep" />
             {loading && <span className="loading-bar-spinner" aria-hidden="true" />}
             {loading ? 'Creating order…' : 'Continue to payment'}
           </button>
@@ -451,13 +457,12 @@ function stepVariable(dir: 1 | -1) {
               </div>
               <h3 className="text-base font-semibold text-gray-900 mb-2">Pay with $USDBT</h3>
               <p className="text-sm text-gray-500 leading-relaxed">
-                Soon you'll be able to make purchases directly with <span className="font-semibold text-gray-700">$USDBT</span> on Base — no swaps, no extra steps.
+                Soon you'll be able to pay directly with <span className="font-semibold text-gray-700">$USDBT</span>. No swaps, no extra steps.
               </p>
               <p className="text-xs text-gray-400 mt-3">Hold $USDBT to unlock this feature when it launches.</p>
               <button
                 onClick={() => setShowUsdbtModal(false)}
-                className="mt-5 w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
-                style={{ backgroundColor: '#2b2bf5' }}
+                className="btn btn-primary btn-block mt-5"
               >
                 Got it
               </button>
