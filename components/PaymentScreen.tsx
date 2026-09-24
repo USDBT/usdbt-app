@@ -138,7 +138,7 @@ export function PaymentScreen({
         </p>
       </div>
 
-      <div className="px-5 py-4 border-t border-gray-100 flex-shrink-0">
+      <div className="px-5 py-3 border-t border-gray-100 flex-shrink-0 bg-white">
         <button
           onClick={pay}
           disabled={phase !== 'ready' || expired || status?.status === 'failed' || status?.status === 'refunded'}
