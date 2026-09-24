@@ -21,3 +21,7 @@ dist/
 tech-updates.md
 docs/
 scripts/
+
+# Internal notes (sync guide contains credentials)
+DUAL_REPO_SYNC*.md
+FRONTEND_INTEGRATION_AI.md
