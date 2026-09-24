@@ -142,7 +142,8 @@ export function PaymentScreen({
         <button
           onClick={pay}
           disabled={phase !== 'ready' || expired || status?.status === 'failed' || status?.status === 'refunded'}
-          className="btn btn-primary btn-block"
+          style={{ backgroundColor: '#2b2bf5', color: '#ffffff' }}
+          className="w-full h-10 px-4 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#2b2bf5] hover:bg-[#1f1fd8] shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
         >
           {phase === 'ready' ? <Wallet size={16} /> : <span className="loading-bar-spinner" aria-hidden="true" />}
           {expired ? 'Order expired' : phase === 'ready' ? `Pay ${formatAmount(order.paymentAmount, currency)}` : phase === 'paying' ? 'Confirm in your wallet' : 'Confirming payment…'}
