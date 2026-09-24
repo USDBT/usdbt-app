@@ -260,7 +260,7 @@ function SidebarContent({
         <Link
           href="/"
           className="flex items-center gap-2.5 rounded-lg hover:opacity-80 transition-opacity"
-          title="Go to usdbt.us"
+          title="USDBT Home"
         >
           <Image src="/logo.png" alt="USDBT" width={38} height={38} className="rounded-lg" priority />
           {!collapsed && <span className="font-bold text-[19px] text-gray-900 tracking-tight">USDBT</span>}
