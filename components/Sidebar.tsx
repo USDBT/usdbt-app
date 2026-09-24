@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   ShoppingBag, ScrollText, Bookmark, Users, Grid2X2, LayoutGrid,
   Settings, HelpCircle, Wallet, ChevronDown, ChevronRight, ChevronLeft, X,
-  ArrowDownToLine, Copy, Check, RefreshCw, Sparkles,
+  ArrowDownToLine, Copy, Check, RefreshCw, Sparkles, Milestone, FileText,
 } from 'lucide-react'
 import { useState, useCallback, useEffect } from 'react'
 import { useAccount } from 'wagmi'
