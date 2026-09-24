@@ -31,6 +31,8 @@ import { getSavedCards, toggleSavedCard } from '@/lib/savedCards'
 
 type Step = 'catalog' | 'configure' | 'payment' | 'success'
 
+const VIEWS: View[] = ['shop', 'assistant', 'orders', 'saved', 'refer', 'categories']
+
 function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-full text-center px-6 py-20">
@@ -532,7 +534,8 @@ export function AppWorkspace({
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const queryView = searchParams?.get('view') as View | null
+  const rawQueryView = searchParams?.get('view')
+  const queryView = VIEWS.includes(rawQueryView as View) ? (rawQueryView as View) : null
   const queryBrowse = searchParams?.get('browse') === 'true'
 
   const { isConnected, address, status } = useAccount()
@@ -572,13 +575,21 @@ export function AppWorkspace({
     fetchProducts().then(setAllProducts).catch(() => {})
   }, [])
 
-  // Sync with searchParams if view changes in URL
+  // URL → view: follow ?view= changes, including Back/Forward to a URL without one
   useEffect(() => {
-    if (queryView && queryView !== view) {
-      setView(queryView)
-      if (queryView === 'shop') setBrowsing(true)
+    const next = queryView ?? initialView
+    if (next !== view) {
+      setView(next)
+      if (next === 'shop') setBrowsing(true)
     }
   }, [queryView])
+
+  // view → URL: keep /app?view= in step so refresh, sharing and Back all land on the same view
+  useEffect(() => {
+    if (pathname !== '/app') return
+    const wanted = view === initialView ? null : view
+    if (wanted !== queryView) router.push(wanted ? `/app?view=${wanted}` : '/app')
+  }, [view])
 
   // Fetch wallet balance for the virtual card
   useEffect(() => {
