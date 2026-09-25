@@ -7,6 +7,7 @@ export const metadata = {
 }
 
 export default function AppPage() {
+  console.log('>>> [SERVER] HIT /app -> RENDERING APP WORKSPACE <<<')
   return (
     <Suspense
       fallback={
