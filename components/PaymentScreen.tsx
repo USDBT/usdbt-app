@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Loader2, Clock, Wallet, AlertCircle } from 'lucide-react'
 import { getOrderStatus, type OrderCreated, type OrderStatus } from '@/lib/api'
-import { formatAmount, useRelayPayment } from '@/lib/relay'
+import { formatAmount, paymentErrorMessage, useRelayPayment } from '@/lib/relay'
 
 const POLL_INTERVAL = 5_000
 const PAID_STATUSES: OrderStatus['status'][] = ['user_debited', 'hot_wallet_funded', 'bitrefill_processing', 'delivered']
@@ -73,9 +73,7 @@ export function PaymentScreen({
       poll()
     } catch (err) {
       setPhase('ready')
-      const message = err instanceof Error ? err.message : 'Payment could not be completed.'
-      // Wallets report a rejected prompt as a long technical error; keep the first line.
-      setError(/rejected|denied/i.test(message) ? 'You declined the request in your wallet. Try again when ready.' : message.split('\n')[0])
+      setError(paymentErrorMessage(err))
     }
   }
 

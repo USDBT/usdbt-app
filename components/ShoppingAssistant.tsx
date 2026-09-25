@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react'
 import { AlertCircle, ArrowRight, Bot, Check, Clock3, LoaderCircle, LockKeyhole, MessageCircle, Send, ShieldCheck, Sparkles, Wallet } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { createOrder, getOrderStatus } from '@/lib/api'
-import { ROBINHOOD_CHAIN_ID, useRelayPayment } from '@/lib/relay'
+import { ROBINHOOD_CHAIN_ID, paymentErrorMessage, useRelayPayment } from '@/lib/relay'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 
 
@@ -301,8 +301,7 @@ export function ShoppingAssistant({ walletAddress, savedEmail }: { walletAddress
       }
       throw new Error('Payment was submitted, but delivery is taking longer than expected. Check Orders for updates.')
     } catch (error) {
-      const errorText = error instanceof Error ? error.message : 'Checkout could not be completed.'
-      setCheckout(key, { phase: 'failed', detail: errorText })
+      setCheckout(key, { phase: 'failed', detail: paymentErrorMessage(error, 'Checkout could not be completed. Try again.') })
     }
   }
 
