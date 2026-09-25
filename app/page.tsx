@@ -1,5 +1,7 @@
 'use client'
 
+// USDBT Landing Page - Root site entrypoint (App workspace lives at /app)
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LandingPage } from '@/components/LandingPage'
