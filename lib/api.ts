@@ -257,3 +257,21 @@ export async function getOrderStats(address: string, authHeader: Record<string, 
   if (!res.ok) throw new Error('failed to load stats')
   return res.json()
 }
+
+// ----------------- Escrow -----------------
+export async function releaseEscrow(orderId: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`/api/orders/${orderId}/escrow/release`, { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to release escrow')
+  return res.json()
+}
+
+export async function disputeEscrow(orderId: string, reason: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`/api/orders/${orderId}/escrow/dispute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  })
+  if (!res.ok) throw new Error('Failed to submit dispute')
+  return res.json()
+}
+
