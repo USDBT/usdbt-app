@@ -402,3 +402,51 @@ export async function togglePriceAlert(id: string): Promise<{ success: boolean; 
   return res.json()
 }
 
+// ----------------- NFT Gift Cards -----------------
+export interface NftGiftCard {
+  id: string
+  tokenId: string
+  ownerWallet: string
+  brandName: string
+  faceValue: number
+  status: 'active' | 'redeemed'
+  chain: string
+  claimCode?: string | null
+  createdAt: string
+}
+
+export async function getNftCards(address: string): Promise<{ count: number; cards: NftGiftCard[] }> {
+  const res = await fetch(`/api/nft/${address}`)
+  if (!res.ok) throw new Error('Failed to fetch NFT gift cards')
+  return res.json()
+}
+
+export async function redeemNftCard(tokenId: string, walletAddress: string): Promise<{
+  message: string
+  claimCode: string
+  brandName: string
+  faceValue: number
+  status: string
+}> {
+  const res = await fetch(`/api/nft/redeem`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tokenId, walletAddress }),
+  })
+  if (!res.ok) throw new Error('Failed to unwrap NFT card')
+  return res.json()
+}
+
+export async function transferNftCard(tokenId: string, fromAddress: string, toAddress: string): Promise<{
+  success: boolean
+  message: string
+}> {
+  const res = await fetch(`/api/nft/transfer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tokenId, fromAddress, toAddress }),
+  })
+  if (!res.ok) throw new Error('Failed to transfer NFT card')
+  return res.json()
+}
+
