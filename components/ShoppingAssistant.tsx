@@ -464,11 +464,13 @@ export function ShoppingAssistant({ walletAddress, savedEmail }: { walletAddress
     const nextMessages = [...base, userMessage, assistantMessage]
     setMessages(nextMessages)
 
+    // Limit chat history payload to avoid bloating input tokens
     const history: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = nextMessages
       .filter((message) => message.text.trim().length > 0 && !message.retryText)
+      .slice(-6)
       .map((message) => ({ role: message.role, content: message.text }))
     if (savedEmail) {
-      history.unshift({ role: 'system', content: 'The saved delivery email is ' + savedEmail + '. Use it for card delivery; ask only for an email if none is available.' })
+      history.unshift({ role: 'system', content: 'Saved email: ' + savedEmail })
     }
 
     try {

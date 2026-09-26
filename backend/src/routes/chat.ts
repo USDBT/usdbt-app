@@ -6,6 +6,7 @@ import { listBrands, getProductOptions } from '../lib/cryptorefills'
 import { getRelayOrderQuote, ROBINHOOD_CHAIN_ID, type RelayPaymentCurrency } from '../lib/relay'
 import { fetchRobinhoodBalances } from './balances'
 import { sql } from '../lib/db'
+import { parseUserIntent } from '../lib/nlp'
 
 export const chatRouter = Router()
 
@@ -20,6 +21,64 @@ interface ChatUserContext {
 function toCurrency(value: unknown, fallback: string): RelayPaymentCurrency {
   const currency = (value ?? fallback) as string
   return currency === 'ETH' ? 'ETH' : 'USDG'
+}
+
+/**
+ * Summarizes tool results to the bare minimum JSON for Groq's conversational context.
+ * The client still receives the full rich widget with logos, but Groq only gets
+ * ~20 tokens instead of 500+ tokens of bloated JSON (image URLs, category tags, etc.).
+ */
+export function summarizeToolResultForLLM(name: string, result: any): string {
+  if (!result || result.error) return JSON.stringify({ error: result?.error || 'failed' })
+  switch (name) {
+    case 'searchBrands': {
+      const matches = Array.isArray(result.matches) ? result.matches : []
+      if (!matches.length) return JSON.stringify({ found: 0 })
+      return JSON.stringify({
+        found: matches.length,
+        brands: matches.map((m: any) => `${m.name} (id:${m.id})`),
+      })
+    }
+    case 'getBrandDetails': {
+      return JSON.stringify({
+        brand: result.familyName,
+        denominations: result.denominations,
+      })
+    }
+    case 'quotePayment': {
+      return JSON.stringify({
+        faceValue: result.faceValue,
+        payAmount: result.paymentAmount,
+        currency: result.paymentCurrency,
+      })
+    }
+    case 'buildPendingIntent': {
+      const i = result.intent || {}
+      return JSON.stringify({
+        ready: true,
+        brand: i.brandName,
+        value: i.faceValue,
+        email: i.email,
+        pay: `${i.paymentAmount} ${i.paymentCurrency}`,
+      })
+    }
+    case 'getWalletBalance': {
+      return JSON.stringify({
+        usdg: result.usdg,
+        eth: result.eth,
+      })
+    }
+    case 'checkOrderStatus': {
+      const o = result.order || {}
+      return JSON.stringify({
+        id: o.id,
+        brand: o.brand_name,
+        status: o.status,
+      })
+    }
+    default:
+      return JSON.stringify(result)
+  }
 }
 
 export async function executeTool(name: string, args: any, userContext: ChatUserContext): Promise<any> {
@@ -87,12 +146,6 @@ export async function executeTool(name: string, args: any, userContext: ChatUser
       let paymentAmount = faceValue
       let timeEstimate = 3
 
-      // NOTE: this quote prices against a placeholder recipient (the treasury
-      // wallet) purely to estimate the amount — it is NOT a real Cryptorefills
-      // order, so its `steps` would deposit to the wrong address if executed.
-      // We deliberately do not return steps here. The frontend must call the
-      // real POST /orders (with paymentCurrency) once the user confirms, and
-      // execute THOSE steps — never anything from this preview.
       try {
         const quote = await getRelayOrderQuote({
           userWallet: userContext.walletAddress || TREASURY_ADDRESS,
@@ -160,8 +213,79 @@ export async function handleChat(req: Request, res: Response) {
   res.setHeader('Connection', 'keep-alive')
 
   const userContext: ChatUserContext = { walletAddress, paymentCurrency }
-  let currentMessages: any[] = [{ role: 'system', content: SYSTEM_PROMPT }, ...messages]
-  const maxIterations = 5
+
+  // 1. NLP Pre-Processing on the latest user message
+  const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user')?.content || ''
+  const parsedIntent = parseUserIntent(lastUserMsg)
+
+  // 2. Token-saving fast paths:
+  // If the user is searching for a brand or category (e.g. "what about for shopping" or "netflix"),
+  // run searchBrands directly, emit the widget immediately, and ask Groq for a single-turn concise reply
+  // without sending function calling schemas. This saves ~85% of input tokens and cuts out an entire roundtrip!
+  if (parsedIntent.intent === 'CATEGORY_SEARCH' || parsedIntent.intent === 'BRAND_SEARCH') {
+    try {
+      const searchRes = await executeTool('searchBrands', { query: parsedIntent.cleanQuery }, userContext)
+      if (searchRes.matches && searchRes.matches.length > 0) {
+        // Emit brand carousel widget immediately
+        res.write(`data: ${JSON.stringify({ type: 'widget', widget: 'brand_carousel', data: searchRes })}\n\n`)
+
+        // Call Groq ONCE with minimal tokens and NO tools schema
+        const brandNames = searchRes.matches.map((m: any) => m.name).join(', ')
+        const singleTurnPrompt = [
+          { role: 'system', content: SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: `${lastUserMsg}\n[System: Matching gift cards displayed in widget: ${brandNames}. Give a warm 1-2 sentence recommendation inviting the user to pick one.]`,
+          },
+        ]
+
+        const response = await fetch(GROQ_API_URL, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages: singleTurnPrompt,
+            temperature: 0.2,
+            max_completion_tokens: 150,
+          }),
+        })
+
+        if (response.ok) {
+          const data: any = await response.json()
+          const text = data.choices?.[0]?.message?.content
+          if (text) {
+            res.write(`data: ${JSON.stringify({ type: 'text', content: text })}\n\n`)
+          }
+          res.write('data: [DONE]\n\n')
+          return res.end()
+        }
+      }
+    } catch (nlpErr) {
+      console.warn('[chat] NLP fast-path fallback:', nlpErr)
+    }
+  }
+
+  // Fast path for balance checks
+  if (parsedIntent.intent === 'BALANCE_CHECK' && userContext.walletAddress && isAddress(userContext.walletAddress)) {
+    try {
+      const balances = await fetchRobinhoodBalances(userContext.walletAddress as Address)
+      res.write(`data: ${JSON.stringify({ type: 'widget', widget: 'wallet_balance', data: { ...balances, chainId: ROBINHOOD_CHAIN_ID } })}\n\n`)
+      res.write(`data: ${JSON.stringify({ type: 'text', content: `Your Robinhood Chain balance is ${balances.usdg} USDG and ${balances.eth} ETH.` })}\n\n`)
+      res.write('data: [DONE]\n\n')
+      return res.end()
+    } catch (balErr) {
+      console.warn('[chat] balance fast-path fallback:', balErr)
+    }
+  }
+
+  // 3. Fallback / Multi-turn Tool-calling loop with strict token budgeting:
+  // Cap message history to the last 4 messages to avoid unbounded token growth.
+  const trimmedHistory = messages.slice(-4)
+  let currentMessages: any[] = [{ role: 'system', content: SYSTEM_PROMPT }, ...trimmedHistory]
+  const maxIterations = 3
 
   try {
     for (let iteration = 0; iteration < maxIterations; iteration++) {
@@ -182,11 +306,11 @@ export async function handleChat(req: Request, res: Response) {
       })
 
       if (!response.ok) {
-        // Provider errors carry account details (org ID, tier); log them, don't send them to the browser
-        console.error('[chat] Groq error', response.status, await response.text())
+        const errText = await response.text()
+        console.error('[chat] Groq error', response.status, errText)
         const error = response.status === 429
-          ? 'The assistant is getting a lot of requests. Try again in a minute.'
-          : 'The assistant is unavailable right now. Try again shortly.'
+          ? 'The assistant is experiencing high volume right now. Please select an option above or try again in a moment.'
+          : 'The assistant is temporarily unavailable. Please try again in a moment.'
         res.write(`data: ${JSON.stringify({ type: 'error', error })}\n\n`)
         res.write('data: [DONE]\n\n')
         return res.end()
@@ -210,22 +334,24 @@ export async function handleChat(req: Request, res: Response) {
         try {
           toolArgs = JSON.parse(toolCall.function.arguments)
         } catch {
-          // leave toolArgs as {} if the model produced malformed JSON
+          // leave toolArgs as {} if model produced malformed JSON
         }
 
         res.write(`data: ${JSON.stringify({ type: 'tool_call', name: toolName, args: toolArgs })}\n\n`)
 
         const toolResult = await executeTool(toolName, toolArgs, userContext)
 
+        // Send full rich payload to frontend widget
         if (toolResult?.widget) {
           res.write(`data: ${JSON.stringify({ type: 'widget', widget: toolResult.widget, data: toolResult })}\n\n`)
         }
 
+        // Send compact, token-minimized summary back to Groq
         currentMessages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
           name: toolName,
-          content: JSON.stringify(toolResult),
+          content: summarizeToolResultForLLM(toolName, toolResult),
         })
       }
     }

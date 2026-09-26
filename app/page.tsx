@@ -7,6 +7,5 @@ export const metadata: Metadata = {
 }
 
 export default function HomePage() {
-  console.log('>>> [SERVER] HIT ROOT / -> RENDERING LANDING PAGE <<<')
   return <LandingPageClient />
 }
