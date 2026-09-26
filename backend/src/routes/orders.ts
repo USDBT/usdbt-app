@@ -299,6 +299,50 @@ export async function createOrder(req: Request, res: Response) {
 
 ordersRouter.post('/', createOrder)
 
+// Escrow Early Release: buyer confirms gift card works and releases escrowed funds to supplier
+ordersRouter.post('/:id/escrow/release', async (req, res) => {
+  const [order] = await sql`
+    SELECT id, is_escrow, escrow_status FROM orders WHERE id = ${req.params.id}
+  `
+  if (!order) return res.status(404).json({ error: 'order not found' })
+  if (!order.is_escrow) return res.status(400).json({ error: 'not an escrow order' })
+
+  await sql`
+    UPDATE orders
+    SET escrow_status = 'escrow_released'
+    WHERE id = ${order.id}
+  `
+
+  res.json({
+    success: true,
+    message: 'Escrow released! Supplier funds unlocked.',
+    escrowStatus: 'escrow_released',
+  })
+})
+
+// Escrow Dispute: buyer flags issue with code, freezing supplier payout
+ordersRouter.post('/:id/escrow/dispute', async (req, res) => {
+  const { reason } = req.body
+  const [order] = await sql`
+    SELECT id, is_escrow, escrow_status FROM orders WHERE id = ${req.params.id}
+  `
+  if (!order) return res.status(404).json({ error: 'order not found' })
+  if (!order.is_escrow) return res.status(400).json({ error: 'not an escrow order' })
+
+  await sql`
+    UPDATE orders
+    SET escrow_status = 'escrow_disputed',
+        failure_reason = ${reason || 'Buyer opened an escrow dispute on card validity'}
+    WHERE id = ${order.id}
+  `
+
+  res.json({
+    success: true,
+    message: 'Escrow frozen. Dispute case created. Support team will review within 2 hours.',
+    escrowStatus: 'escrow_disputed',
+  })
+})
+
 ordersRouter.get('/:id', async (req, res) => {
   const [order] = await sql`
     SELECT id, status, brand_name, face_value, coin_amount, payment_address,
