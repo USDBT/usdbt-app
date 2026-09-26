@@ -28,10 +28,30 @@ import { deriveCategories } from '@/lib/categories'
 import { useAuth } from '@/hooks/useAuth'
 import { getStoredEmail, storeEmail, clearToken, getValidToken, authHeaders, deductSimBalance, getSimSpent } from '@/lib/auth'
 import { getSavedCards, toggleSavedCard } from '@/lib/savedCards'
+import { LoyaltyView } from '@/components/LoyaltyView'
+import { MerchantView } from '@/components/MerchantView'
+import { ReferralView } from '@/components/ReferralView'
+import { NftCardsView } from '@/components/NftCardsView'
+import { PriceAlertsView } from '@/components/PriceAlertsView'
+import { ComplianceView } from '@/components/ComplianceView'
+import { AnalyticsView } from '@/components/AnalyticsView'
 
 type Step = 'catalog' | 'configure' | 'payment' | 'success'
 
-const VIEWS: View[] = ['shop', 'assistant', 'orders', 'saved', 'refer', 'categories']
+const VIEWS: View[] = [
+  'shop',
+  'assistant',
+  'orders',
+  'saved',
+  'loyalty',
+  'analytics',
+  'merchant',
+  'nft',
+  'alerts',
+  'refer',
+  'compliance',
+  'categories',
+]
 
 function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
   return (
@@ -846,8 +866,20 @@ export function AppWorkspace({
                   onSelect={(p) => { setProduct(p); setStep('configure'); setView('shop'); setBrowsing(true) }}
                   onToggleSave={handleToggleSave}
                 />
+              ) : view === 'loyalty' ? (
+                <LoyaltyView address={address} />
+              ) : view === 'analytics' ? (
+                <AnalyticsView address={address} />
+              ) : view === 'merchant' ? (
+                <MerchantView address={address} />
+              ) : view === 'nft' ? (
+                <NftCardsView address={address} />
+              ) : view === 'alerts' ? (
+                <PriceAlertsView address={address} />
+              ) : view === 'compliance' ? (
+                <ComplianceView address={address} />
               ) : view === 'refer' ? (
-                <ReferView />
+                <ReferralView address={address} />
               ) : view === 'categories' ? (
                 <CategoriesView
                   onNavigate={handleNavigate}

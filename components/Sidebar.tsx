@@ -6,6 +6,7 @@ import {
   ShoppingBag, ScrollText, Bookmark, Users, Grid2X2, LayoutGrid,
   Settings, HelpCircle, Wallet, ChevronDown, ChevronRight, ChevronLeft, X,
   ArrowDownToLine, Copy, Check, RefreshCw, Sparkles, Milestone, FileText,
+  Award, Store, Bell, ShieldCheck, BarChart3, Gift,
 } from 'lucide-react'
 import { useState, useCallback, useEffect } from 'react'
 import { useAccount } from 'wagmi'
@@ -18,17 +19,35 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import QRCode from 'react-qr-code'
 
-export type View = 'shop' | 'assistant' | 'orders' | 'saved' | 'refer' | 'categories'
+export type View =
+  | 'shop'
+  | 'assistant'
+  | 'orders'
+  | 'saved'
+  | 'loyalty'
+  | 'analytics'
+  | 'merchant'
+  | 'nft'
+  | 'alerts'
+  | 'refer'
+  | 'compliance'
+  | 'categories'
 
 const SPRING = { type: 'spring' as const, damping: 32, stiffness: 300 }
 
 const NAV: { id: View; label: string; icon: React.ElementType }[] = [
-  { id: 'shop',       label: 'Shop',       icon: ShoppingBag },
-  { id: 'assistant',  label: 'Assistant', icon: Sparkles },
-  { id: 'orders',     label: 'Orders',     icon: ScrollText  },
-  { id: 'saved',      label: 'Saved',      icon: Bookmark    },
-  { id: 'refer',      label: 'Refer',      icon: Users       },
-  { id: 'categories', label: 'Categories', icon: Grid2X2     },
+  { id: 'shop',       label: 'Shop',        icon: ShoppingBag },
+  { id: 'assistant',  label: 'Assistant',   icon: Sparkles    },
+  { id: 'analytics',  label: 'Analytics',   icon: BarChart3   },
+  { id: 'loyalty',    label: 'Rewards',     icon: Award       },
+  { id: 'orders',     label: 'Orders',      icon: ScrollText  },
+  { id: 'saved',      label: 'Saved',       icon: Bookmark    },
+  { id: 'nft',        label: 'NFT Cards',   icon: Gift        },
+  { id: 'refer',      label: 'Refer & Earn',icon: Users       },
+  { id: 'alerts',     label: 'Price Alerts',icon: Bell        },
+  { id: 'merchant',   label: 'Merchant API',icon: Store       },
+  { id: 'compliance', label: 'Compliance',  icon: ShieldCheck },
+  { id: 'categories', label: 'Categories',  icon: Grid2X2     },
 ]
 
 type Balance = { usdg: string; eth: string }
