@@ -13,6 +13,7 @@ import { referralsRouter } from './routes/referrals'
 import { alertsRouter } from './routes/alerts'
 import { nftRouter } from './routes/nft'
 import { complianceRouter } from './routes/compliance'
+import { rewardsRouter } from './routes/rewards'
 import { startPoller } from './services/poller'
 import { sql, runMigrations } from './lib/db'
 
@@ -57,6 +58,7 @@ app.use('/referrals', referralsRouter)
 app.use('/alerts', alertsRouter)
 app.use('/nft', nftRouter)
 app.use('/compliance', complianceRouter)
+app.use('/rewards', rewardsRouter)
 
 app.listen(PORT, async () => {
   console.log(`[usdtb-backend] listening on port ${PORT}`)
