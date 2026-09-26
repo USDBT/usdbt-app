@@ -356,3 +356,49 @@ export async function verifyReferralCode(code: string): Promise<{ valid: boolean
   return res.json()
 }
 
+// ----------------- Price Alerts -----------------
+export interface PriceAlert {
+  id: string
+  wallet_address: string
+  email: string
+  brand_id: string
+  brand_name: string
+  target_discount_pct: number
+  is_active: boolean
+  created_at: string
+}
+
+export async function getPriceAlerts(address: string): Promise<{ alerts: PriceAlert[] }> {
+  const res = await fetch(`/api/alerts/${address}`)
+  if (!res.ok) throw new Error('Failed to fetch price alerts')
+  return res.json()
+}
+
+export async function createPriceAlert(body: {
+  walletAddress: string
+  email: string
+  brandId: string
+  brandName: string
+  targetDiscountPct: number
+}): Promise<{ message: string; alert: PriceAlert }> {
+  const res = await fetch(`/api/alerts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error('Failed to create alert')
+  return res.json()
+}
+
+export async function deletePriceAlert(id: string): Promise<{ success: boolean }> {
+  const res = await fetch(`/api/alerts/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete alert')
+  return res.json()
+}
+
+export async function togglePriceAlert(id: string): Promise<{ success: boolean; alert: PriceAlert }> {
+  const res = await fetch(`/api/alerts/${id}/toggle`, { method: 'PATCH' })
+  if (!res.ok) throw new Error('Failed to toggle alert')
+  return res.json()
+}
+
