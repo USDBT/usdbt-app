@@ -11,6 +11,7 @@ const SIMULATED_TEST_ADDRESS = '0x1111111111111111111111111111111111111111'
 mock.module('../lib/simulate', () => ({
   isSimulatedAddress: (addr?: string) => addr?.toLowerCase() === SIMULATED_TEST_ADDRESS,
   simulateConfig: { balance: { usdc: '10.00', usdbt: '0.0000' } },
+  simulatedCoinAmount: (faceValue: number) => parseFloat((faceValue * 1.0064).toFixed(2)),
 }))
 
 const { getBalances } = await import('./balances')

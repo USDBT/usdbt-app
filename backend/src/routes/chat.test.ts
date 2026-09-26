@@ -4,6 +4,7 @@ process.env.DATABASE_URL ??= 'postgresql://test:test@localhost:5432/test'
 process.env.RELAY_API_KEY ??= 'test-relay-key'
 process.env.GROQ_API_KEY ??= 'test-groq-key'
 process.env.PAYMENT_WALLET_ADDRESS ??= '0x6bcB5Bac495be85C079d780b66352Cd9B1aAAc47'
+process.env.CRYPTOREFILLS_PARTNER_ID ??= 'test-partner-id'
 
 // Deliberately no mock.module() here — bun:test's mock.module is process-wide,
 // not per-file (see orders.test.ts's note), and chat.ts shares '../lib/db' and
