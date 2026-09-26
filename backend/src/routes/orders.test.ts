@@ -153,3 +153,15 @@ describe('POST /orders', () => {
     expect(status).toHaveBeenCalledWith(400)
   })
 })
+
+describe('POST /orders real-order limits', () => {
+  it('rejects more than one card per order for a real wallet', async () => {
+    const calls = mockFetchOk()
+    const { req, res, status, json } = mockReqRes({ ...validBody, quantity: 3 })
+    await createOrder(req, res)
+    expect(status).toHaveBeenCalledWith(400)
+    expect(String(json.mock.calls[0][0].error)).toContain('more than one card')
+    expect(calls).toHaveLength(0)
+    globalThis.fetch = originalFetch
+  })
+})

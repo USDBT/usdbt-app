@@ -175,11 +175,12 @@ async function earnedToday(tx: postgres.TransactionSql, wallet: string): Promise
 export async function creditOrderRewards(orderId: string): Promise<void> {
   await sql.begin(async (tx) => {
     const [order] = await tx`
-      SELECT lower(wallet_address) AS wallet, face_value, status, lower(referrer_wallet) AS referrer
+      SELECT lower(wallet_address) AS wallet, coin_amount, status, lower(referrer_wallet) AS referrer
       FROM orders WHERE id = ${orderId}
     `
     if (!order || order.status !== ORDER_STATUS.DELIVERED) return
-    const paidUsd = Number(order.face_value) || 0
+    // Rewards are based on what the provider actually charged (USDC), not the requested face value
+    const paidUsd = Number(order.coin_amount) || 0
 
     // Serialize budget checks so concurrent deliveries cannot overspend the month.
     await tx`SELECT pg_advisory_xact_lock(hashtext('usdbt_rewards_budget'))`
