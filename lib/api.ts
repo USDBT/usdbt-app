@@ -300,6 +300,7 @@ export interface LoyaltyStats {
     action: string
     created_at: string
   }>
+  usdbtLaunched?: boolean
 }
 
 export async function getLoyaltyStats(address: string): Promise<LoyaltyStats> {
@@ -329,15 +330,13 @@ export interface ReferralStats {
   referralCode: string
   referralLink: string
   totalReferred: number
-  totalRewardsUsd: number
-  claimableUsd: number
-  rewardRatePct: number
+  totalRewardPoints: number
+  rewardPointsPerUsd: number
   friendDiscountPct: number
   recentReferrals: Array<{
     id: string
     referredWallet: string
-    rewardAmount: number
-    status: string
+    rewardPoints: number
     createdAt: string
   }>
 }
@@ -348,14 +347,30 @@ export async function getReferralStats(address: string): Promise<ReferralStats> 
   return res.json()
 }
 
-export async function claimReferralRewards(walletAddress: string): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`/api/referrals/claim`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ walletAddress }),
-  })
-  if (!res.ok) throw new Error('Failed to claim rewards')
+// ----------------- $USDBT Rewards -----------------
+export interface RewardsStatus {
+  usdbtLaunched: boolean
+  usdPerPoint: number
+  earnPointsPerUsd: number
+  referralPointsPerUsd: number
+  maxPointsPerOrder: number
+  maxPointsPerDay: number
+  minConvertPoints: number
+  usdbtPriceUsd: number | null
+}
+
+export async function getRewardsStatus(): Promise<RewardsStatus> {
+  const res = await fetch('/api/rewards/status')
+  if (!res.ok) throw new Error('Failed to fetch rewards status')
   return res.json()
+}
+
+// Converts the whole points balance into a $USDBT payout request (only after launch).
+export async function convertPointsToUsdbt(authHeader: Record<string, string>): Promise<{ message: string }> {
+  const res = await fetch('/api/rewards/convert', { method: 'POST', headers: authHeader })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || 'Could not convert your points. Try again.')
+  return data
 }
 
 export async function verifyReferralCode(code: string): Promise<{ valid: boolean; discountPct: number }> {
