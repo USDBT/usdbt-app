@@ -1,12 +1,8 @@
 import { Router } from 'express'
 import { sql } from '../lib/db'
+import { deriveReferralCode, resolveReferrer } from '../lib/rewards'
 
 export const referralsRouter = Router()
-
-function deriveReferralCode(walletAddress: string): string {
-  const clean = walletAddress.toLowerCase().replace(/^0x/, '')
-  return `REF-${clean.slice(0, 6).toUpperCase()}`
-}
 
 referralsRouter.get('/:address', async (req, res) => {
   const addr = req.params.address?.toLowerCase()
@@ -66,13 +62,13 @@ referralsRouter.post('/claim', async (req, res) => {
 
 referralsRouter.get('/verify/:code', async (req, res) => {
   const code = req.params.code?.toUpperCase()
-  if (!code || !code.startsWith('REF-')) {
+  if (!code || !(await resolveReferrer(code))) {
     return res.status(404).json({ valid: false, error: 'Invalid referral code' })
   }
   res.json({
     valid: true,
     code,
     discountPct: 2.0,
-    description: '2% instant discount on your order',
+    description: '2% off your first order',
   })
 })
