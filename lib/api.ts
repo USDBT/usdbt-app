@@ -275,3 +275,43 @@ export async function disputeEscrow(orderId: string, reason: string): Promise<{ 
   return res.json()
 }
 
+// ----------------- Loyalty Points -----------------
+export interface LoyaltyStats {
+  walletAddress: string
+  pointsBalance: number
+  lifetimePoints: number
+  tier: 'bronze' | 'silver' | 'gold' | 'platinum'
+  multiplier: number
+  perkDiscountPct: number
+  nextTierThreshold: number
+  pointsToNextTier: number
+  transactions: Array<{
+    id: string
+    order_id?: string
+    points_delta: number
+    action: string
+    created_at: string
+  }>
+}
+
+export async function getLoyaltyStats(address: string): Promise<LoyaltyStats> {
+  const res = await fetch(`/api/loyalty/${address}`)
+  if (!res.ok) throw new Error('Failed to fetch loyalty stats')
+  return res.json()
+}
+
+export async function calculateLoyaltyDiscount(walletAddress: string, faceValue: number, points: number): Promise<{
+  availablePoints: number
+  pointsUsed: number
+  discountAmount: number
+  remainingPrice: number
+}> {
+  const res = await fetch(`/api/loyalty/calculate-discount`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ walletAddress, faceValue, points }),
+  })
+  if (!res.ok) throw new Error('Failed to calculate discount')
+  return res.json()
+}
+
