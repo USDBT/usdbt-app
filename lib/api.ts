@@ -450,3 +450,84 @@ export async function transferNftCard(tokenId: string, fromAddress: string, toAd
   return res.json()
 }
 
+// ----------------- Merchant API -----------------
+export interface MerchantProfile {
+  id: string
+  name: string
+  walletAddress: string
+  apiKey: string
+  webhookUrl?: string | null
+  totalVolume: number
+}
+
+export interface MerchantOrder {
+  id: string
+  external_ref?: string
+  product_id: string
+  brand_name: string
+  face_value: number
+  recipient_email: string
+  status: string
+  card_code?: string
+  created_at: string
+}
+
+export async function registerMerchant(walletAddress: string, merchantName: string, webhookUrl?: string): Promise<{
+  message: string
+  merchant: MerchantProfile
+}> {
+  const res = await fetch(`/api/merchant/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ walletAddress, merchantName, webhookUrl }),
+  })
+  if (!res.ok) throw new Error('Failed to register merchant')
+  return res.json()
+}
+
+export async function getMerchantProfile(apiKey: string): Promise<{
+  merchant: MerchantProfile
+  orders: MerchantOrder[]
+}> {
+  const res = await fetch(`/api/merchant/me`, {
+    headers: { 'x-api-key': apiKey },
+  })
+  if (!res.ok) throw new Error('Failed to fetch merchant profile')
+  return res.json()
+}
+
+export async function getMerchantProducts(apiKey: string): Promise<{
+  count: number
+  products: Array<{
+    productId: string
+    name: string
+    country: string
+    wholesaleDiscount: string
+    denominations: number[]
+  }>
+}> {
+  const res = await fetch(`/api/merchant/products`, {
+    headers: { 'x-api-key': apiKey },
+  })
+  if (!res.ok) throw new Error('Failed to fetch merchant products')
+  return res.json()
+}
+
+export async function createMerchantOrder(apiKey: string, body: {
+  productId: string
+  brandName: string
+  faceValue: number
+  recipientEmail: string
+  externalRef?: string
+}): Promise<MerchantOrder> {
+  const res = await fetch(`/api/merchant/orders`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error('Failed to execute merchant order')
+  return res.json()
+}
