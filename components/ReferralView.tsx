@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Users, Copy, Check, Gift, ArrowRight, Share2, DollarSign } from 'lucide-react'
-import { getReferralStats, claimReferralRewards, type ReferralStats } from '@/lib/api'
+import { Copy, Check, Gift, Clock } from 'lucide-react'
+import { getReferralStats, type ReferralStats } from '@/lib/api'
 import QRCode from 'react-qr-code'
 
 export function ReferralView({ address }: { address?: string }) {
@@ -10,8 +10,6 @@ export function ReferralView({ address }: { address?: string }) {
   const [loading, setLoading] = useState(true)
   const [copiedLink, setCopiedLink] = useState(false)
   const [copiedCode, setCopiedCode] = useState(false)
-  const [claiming, setClaiming] = useState(false)
-  const [claimSuccess, setClaimSuccess] = useState(false)
 
   useEffect(() => {
     if (!address) {
@@ -38,21 +36,6 @@ export function ReferralView({ address }: { address?: string }) {
     setTimeout(() => setCopiedCode(false), 2000)
   }
 
-  async function handleClaim() {
-    if (!address) return
-    setClaiming(true)
-    try {
-      await claimReferralRewards(address)
-      setClaimSuccess(true)
-      if (stats) setStats({ ...stats, claimableUsd: 0 })
-      setTimeout(() => setClaimSuccess(false), 3000)
-    } catch {
-      alert('Could not claim rewards')
-    } finally {
-      setClaiming(false)
-    }
-  }
-
   const referralCode = stats?.referralCode ?? (address ? `REF-${address.slice(2, 8).toUpperCase()}` : 'REF-CONNECT')
   const referralLink = stats?.referralLink ?? `https://usdbt.us/app?ref=${referralCode}`
 
@@ -64,9 +47,9 @@ export function ReferralView({ address }: { address?: string }) {
           <Gift size={13} />
           Referral Rewards Program
         </div>
-        <h1 className="text-2xl font-bold">Invite Friends, Earn Crypto Cashback</h1>
+        <h1 className="text-2xl font-bold">Invite Friends, Earn Points</h1>
         <p className="text-xs text-white/80 mt-1 max-w-lg">
-          Give your friends 2% off their gift cards. You earn 1.5% perpetual cashback on every purchase they make!
+          Your friends get 2% off their first order. You earn 1 point for every $1 they pay, added when their card is delivered.
         </p>
       </div>
 
@@ -75,25 +58,19 @@ export function ReferralView({ address }: { address?: string }) {
         <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-xs">
           <span className="text-xs text-gray-400 font-medium">Referred Friends</span>
           <p className="text-2xl font-bold text-gray-900 mt-1">{stats?.totalReferred ?? 0}</p>
-          <span className="text-[11px] text-gray-400">Total signups using your code</span>
+          <span className="text-[11px] text-gray-400">Friends whose order was delivered</span>
         </div>
         <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-xs">
-          <span className="text-xs text-gray-400 font-medium">Total Rewards Earned</span>
-          <p className="text-2xl font-bold text-emerald-600 font-mono mt-1">${(stats?.totalRewardsUsd ?? 0).toFixed(2)}</p>
-          <span className="text-[11px] text-gray-400">Paid out in USDC / USDG</span>
+          <span className="text-xs text-gray-400 font-medium">Referral Points Earned</span>
+          <p className="text-2xl font-bold text-emerald-600 font-mono mt-1">{(stats?.totalRewardPoints ?? 0).toLocaleString()} pts</p>
+          <span className="text-[11px] text-gray-400">Worth ${((stats?.totalRewardPoints ?? 0) / 100).toFixed(2)}. Added to your Rewards balance.</span>
         </div>
-        <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-xs flex flex-col justify-between">
-          <div>
-            <span className="text-xs text-gray-400 font-medium">Claimable Rewards</span>
-            <p className="text-2xl font-bold text-gray-900 font-mono mt-1">${(stats?.claimableUsd ?? 0).toFixed(2)}</p>
-          </div>
-          <button
-            onClick={handleClaim}
-            disabled={claiming || (stats?.claimableUsd ?? 0) <= 0}
-            className="mt-2 w-full py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-40"
-          >
-            {claimSuccess ? 'Claimed! ✓' : claiming ? 'Claiming…' : 'Claim to Wallet'}
-          </button>
+        <div className="bg-amber-50 rounded-xl p-4 border border-amber-200 flex gap-2.5">
+          <Clock size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-[11px] text-amber-900 leading-relaxed">
+            <strong>$USDBT has not launched yet.</strong> Referral rewards are paid in points for now. When $USDBT launches,
+            you can convert them to $USDBT on the Rewards page.
+          </p>
         </div>
       </div>
 
@@ -166,7 +143,7 @@ export function ReferralView({ address }: { address?: string }) {
             {stats?.recentReferrals.map((r) => (
               <div key={r.id} className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-gray-50 border border-gray-100">
                 <span className="font-mono text-gray-700">{r.referredWallet}</span>
-                <span className="font-mono font-bold text-emerald-600">+${r.rewardAmount.toFixed(2)}</span>
+                <span className="font-mono font-bold text-emerald-600">+{r.rewardPoints} pts</span>
               </div>
             ))}
           </div>
