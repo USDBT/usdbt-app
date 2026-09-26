@@ -51,9 +51,10 @@ function normalizeProduct(raw: any): Product {
   }
 }
 
-export type PaymentCurrency = 'USDG' | 'ETH'
+export type PaymentChain = 'robinhood' | 'base' | 'ethereum' | 'solana'
+export type PaymentCurrency = 'USDG' | 'ETH' | 'USDC' | 'USDT' | 'SOL'
 
-// Balances on Robinhood Chain (4663)
+// Balances on connected wallets
 export interface WalletBalances {
   usdg: string
   eth: string
@@ -88,11 +89,27 @@ export interface OrderCreated {
   paymentAmount: number
   currency: string
   paymentCurrency?: PaymentCurrency
+  paymentChain?: PaymentChain
   chainId?: number
+  solanaDepositAddress?: string | null
+  solanaPayUri?: string | null
   steps: RelayOrderStep[]
   timeEstimate: number
   expiresAt: string
+  quantity?: number
+  discounts?: {
+    volumeDiscountPct: number
+    volumeDiscountAmount: number
+    referralDiscountAmount: number
+    loyaltyDiscountAmount: number
+    totalSaved: number
+  }
+  isNft?: boolean
+  nftTokenId?: string | null
+  isEscrow?: boolean
+  escrowStatus?: string | null
 }
+
 export interface OrderStatus {
   orderId: string
   status:
@@ -107,12 +124,19 @@ export interface OrderStatus {
   faceValue: number
   paymentAmount: number
   currency: string
+  paymentChain?: PaymentChain
   paymentAddress?: string
+  solanaDepositAddress?: string | null
   txHash: string | null
   expiresAt: string
   estimatedReadyAt?: string | null
   deliveredAt?: string | null
   failureReason?: string | null
+  quantity?: number
+  isNft?: boolean
+  nftTokenId?: string | null
+  isEscrow?: boolean
+  escrowStatus?: string | null
   progress?: {
     step: number
     totalSteps: number
@@ -176,6 +200,12 @@ export async function createOrder(body: {
   email: string
   walletAddress: string
   paymentCurrency?: PaymentCurrency
+  paymentChain?: PaymentChain
+  quantity?: number
+  loyaltyPointsUsed?: number
+  referralCode?: string
+  isNft?: boolean
+  isEscrow?: boolean
 }): Promise<OrderCreated> {
   const res = await fetch('/api/orders', {
     method: 'POST',
