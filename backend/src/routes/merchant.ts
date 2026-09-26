@@ -82,12 +82,12 @@ merchantRouter.get('/products', requireMerchant, async (_req, res) => {
     const brands = await listBrands()
     // Provide wholesale merchant discount rate of 2.5% off face value
     const wholesaleProducts = brands.slice(0, 50).map((b) => ({
-      productId: b.id,
-      name: b.name,
-      country: b.country || 'US',
-      denominations: b.denominations,
+      productId: b.family_name,
+      name: b.brand_name,
+      country: b.countries?.[0] || 'US',
+      denominations: { min: b.min ?? null, max: b.max ?? null },
       wholesaleDiscount: '2.5%',
-      settlementCurrencies: ['USDC', 'USDG', 'ETH', 'SOL'],
+      settlementCurrencies: ['USDG', 'ETH'],
     }))
     res.json({ count: wholesaleProducts.length, products: wholesaleProducts })
   } catch {
