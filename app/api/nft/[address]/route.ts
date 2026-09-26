@@ -11,20 +11,6 @@ export async function GET(
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {
-    return NextResponse.json({
-      count: 1,
-      cards: [
-        {
-          id: 'nft-1',
-          tokenId: 'NFT-88219A',
-          ownerWallet: address,
-          brandName: 'Amazon',
-          faceValue: 50,
-          status: 'active',
-          chain: 'base',
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    })
+    return NextResponse.json({ error: 'Could not reach the server. Try again.' }, { status: 502 })
   }
 }

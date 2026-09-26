@@ -12,12 +12,6 @@ export async function POST(req: Request) {
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {
-    return NextResponse.json({
-      message: 'NFT voucher unwrapped successfully!',
-      claimCode: `USDBT-AMAZON-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
-      brandName: 'Amazon',
-      faceValue: 50,
-      status: 'redeemed',
-    })
+    return NextResponse.json({ error: 'Could not reach the server. Try again.' }, { status: 502 })
   }
 }

@@ -13,6 +13,6 @@ export async function POST(
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {
-    return NextResponse.json({ success: true, message: 'Escrow released (offline mode)', escrowStatus: 'escrow_released' })
+    return NextResponse.json({ error: 'Could not reach the server. Try again.' }, { status: 502 })
   }
 }

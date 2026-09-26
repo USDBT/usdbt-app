@@ -16,16 +16,6 @@ export async function POST(req: Request) {
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {
-    const cardCode = `USDBT-${(body.brandName || 'CARD').toUpperCase().replace(/\s+/g, '')}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-    return NextResponse.json({
-      orderId: `mo-${Date.now()}`,
-      externalRef: body.externalRef || null,
-      status: 'delivered',
-      brandName: body.brandName,
-      faceValue: Number(body.faceValue),
-      cardCode,
-      recipientEmail: body.recipientEmail,
-      deliveredAt: new Date().toISOString(),
-    }, { status: 201 })
+    return NextResponse.json({ error: 'Could not reach the server. Try again.' }, { status: 502 })
   }
 }

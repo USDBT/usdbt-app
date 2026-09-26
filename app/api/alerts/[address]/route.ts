@@ -11,19 +11,6 @@ export async function GET(
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {
-    return NextResponse.json({
-      alerts: [
-        {
-          id: 'alert-1',
-          wallet_address: address,
-          email: 'user@usdbt.us',
-          brand_id: 'amazon',
-          brand_name: 'Amazon',
-          target_discount_pct: 5,
-          is_active: true,
-          created_at: new Date().toISOString(),
-        },
-      ],
-    })
+    return NextResponse.json({ error: 'Could not reach the server. Try again.' }, { status: 502 })
   }
 }

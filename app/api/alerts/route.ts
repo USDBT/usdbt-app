@@ -12,9 +12,6 @@ export async function POST(req: Request) {
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {
-    return NextResponse.json({
-      message: `Price alert set for ${body.brandName}`,
-      alert: { ...body, id: `alert-${Date.now()}`, is_active: true, created_at: new Date().toISOString() },
-    }, { status: 201 })
+    return NextResponse.json({ error: 'Could not reach the server. Try again.' }, { status: 502 })
   }
 }

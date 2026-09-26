@@ -12,11 +12,6 @@ export async function POST(req: Request) {
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {
-    return NextResponse.json({
-      status: 'APPROVED',
-      walletAddress: body.walletAddress,
-      riskScore: 0.02,
-      ofacMatch: false,
-    })
+    return NextResponse.json({ error: 'Could not reach the server. Try again.' }, { status: 502 })
   }
 }

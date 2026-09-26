@@ -12,18 +12,6 @@ export async function POST(req: Request) {
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {
-    const key = `sk_live_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`
-    return NextResponse.json({
-      message: 'Merchant account created successfully',
-      merchant: {
-        id: `merchant-${Date.now()}`,
-        name: body.merchantName,
-        walletAddress: body.walletAddress,
-        apiKey: key,
-        webhookUrl: body.webhookUrl || null,
-        status: 'active',
-        totalVolume: 0,
-      },
-    }, { status: 201 })
+    return NextResponse.json({ error: 'Could not reach the server. Try again.' }, { status: 502 })
   }
 }

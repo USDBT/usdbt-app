@@ -11,7 +11,6 @@ export async function GET(
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })
   } catch {
-    const valid = code.toUpperCase().startsWith('REF-')
-    return NextResponse.json({ valid, discountPct: valid ? 2.0 : 0 })
+    return NextResponse.json({ error: 'Could not reach the server. Try again.' }, { status: 502 })
   }
 }
