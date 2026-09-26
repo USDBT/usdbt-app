@@ -10,6 +10,7 @@ import { chatRouter } from './routes/chat'
 import { loyaltyRouter } from './routes/loyalty'
 import { referralsRouter } from './routes/referrals'
 import { alertsRouter } from './routes/alerts'
+import { nftRouter } from './routes/nft'
 import { startPoller } from './services/poller'
 import { sql, runMigrations } from './lib/db'
 
@@ -51,6 +52,7 @@ app.use('/chat', chatRouter)
 app.use('/loyalty', loyaltyRouter)
 app.use('/referrals', referralsRouter)
 app.use('/alerts', alertsRouter)
+app.use('/nft', nftRouter)
 
 app.listen(PORT, async () => {
   console.log(`[usdtb-backend] listening on port ${PORT}`)
