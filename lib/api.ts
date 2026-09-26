@@ -315,3 +315,44 @@ export async function calculateLoyaltyDiscount(walletAddress: string, faceValue:
   return res.json()
 }
 
+// ----------------- Referrals -----------------
+export interface ReferralStats {
+  walletAddress: string
+  referralCode: string
+  referralLink: string
+  totalReferred: number
+  totalRewardsUsd: number
+  claimableUsd: number
+  rewardRatePct: number
+  friendDiscountPct: number
+  recentReferrals: Array<{
+    id: string
+    referredWallet: string
+    rewardAmount: number
+    status: string
+    createdAt: string
+  }>
+}
+
+export async function getReferralStats(address: string): Promise<ReferralStats> {
+  const res = await fetch(`/api/referrals/${address}`)
+  if (!res.ok) throw new Error('Failed to fetch referral stats')
+  return res.json()
+}
+
+export async function claimReferralRewards(walletAddress: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`/api/referrals/claim`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ walletAddress }),
+  })
+  if (!res.ok) throw new Error('Failed to claim rewards')
+  return res.json()
+}
+
+export async function verifyReferralCode(code: string): Promise<{ valid: boolean; discountPct: number }> {
+  const res = await fetch(`/api/referrals/verify/${encodeURIComponent(code)}`)
+  if (!res.ok) return { valid: false, discountPct: 0 }
+  return res.json()
+}
+
