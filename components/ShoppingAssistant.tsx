@@ -179,11 +179,13 @@ export function ShoppingAssistant({ walletAddress, savedEmail }: { walletAddress
     const nextMessages = [...messages, userMessage, assistantMessage]
     setMessages(nextMessages)
 
+    // Limit chat history payload to avoid bloating input tokens
     const history: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = nextMessages
       .filter((message) => message.text.trim().length > 0)
+      .slice(-6)
       .map((message) => ({ role: message.role, content: message.text }))
     if (savedEmail) {
-      history.unshift({ role: 'system', content: 'The saved delivery email is ' + savedEmail + '. Use it for card delivery; ask only for an email if none is available.' })
+      history.unshift({ role: 'system', content: 'Saved email: ' + savedEmail })
     }
 
     try {
@@ -227,10 +229,14 @@ export function ShoppingAssistant({ walletAddress, savedEmail }: { walletAddress
             : message))
           setBusyLabel('')
         } else if (event.type === 'error') {
-          const errorText = String(event.error ?? 'The assistant encountered an error.')
-          const details = typeof event.details === 'string' ? event.details : ''
+          let errorText = String(event.error ?? 'The assistant encountered an issue.')
+          if (/rate_limit|rate limit|too many requests|429/i.test(errorText + ' ' + String(event.details ?? ''))) {
+            errorText = 'The assistant is receiving a lot of shoppers right now. Please select an option above or try again in a moment.'
+          } else if (/AI provider error|groq/i.test(errorText)) {
+            errorText = 'The assistant is temporarily busy. Please pick an option above or try again shortly.'
+          }
           setMessages((current) => current.map((message) => message.id === assistantId
-            ? { ...message, text: message.text + (message.text ? '\n\n' : '') + errorText + (details ? ': ' + details : '') }
+            ? { ...message, text: message.text + (message.text ? '\n\n' : '') + errorText }
             : message))
           setBusyLabel('')
         }

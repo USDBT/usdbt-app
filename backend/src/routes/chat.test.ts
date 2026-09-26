@@ -148,3 +148,38 @@ describe('executeTool', () => {
     expect(result.error).toMatch(/email/i)
   })
 })
+
+describe('summarizeToolResultForLLM', () => {
+  const { summarizeToolResultForLLM } = require('./chat')
+
+  it('strips bulky image URLs and categories from searchBrands', () => {
+    const raw = {
+      matches: [
+        { id: 'target-us', name: 'Target', categories: ['shopping'], image: 'https://cdn.example.com/target-logo-very-long-url.webp' },
+        { id: 'kroger-us', name: 'Kroger', categories: ['grocery'], image: 'https://cdn.example.com/kroger-logo-very-long-url.webp' },
+      ],
+      widget: 'brand_carousel',
+    }
+
+    const summary = JSON.parse(summarizeToolResultForLLM('searchBrands', raw))
+    expect(summary.found).toBe(2)
+    expect(summary.brands).toEqual(['Target (id:target-us)', 'Kroger (id:kroger-us)'])
+    expect(JSON.stringify(summary)).not.toContain('https://')
+    expect(JSON.stringify(summary)).not.toContain('image')
+  })
+
+  it('summarizes denomination details to array only', () => {
+    const raw = { familyName: 'netflix-us', denominations: [10, 25, 50, 100], widget: 'denomination_picker' }
+    const summary = JSON.parse(summarizeToolResultForLLM('getBrandDetails', raw))
+    expect(summary).toEqual({ brand: 'netflix-us', denominations: [10, 25, 50, 100] })
+  })
+
+  it('summarizes checkout intent to core fields', () => {
+    const raw = {
+      intent: { brandName: 'Netflix', faceValue: 25, email: 'a@b.com', paymentAmount: 26.5, paymentCurrency: 'USDG' },
+      widget: 'order_intent',
+    }
+    const summary = JSON.parse(summarizeToolResultForLLM('buildPendingIntent', raw))
+    expect(summary).toEqual({ ready: true, brand: 'Netflix', value: 25, email: 'a@b.com', pay: '26.5 USDG' })
+  })
+})
