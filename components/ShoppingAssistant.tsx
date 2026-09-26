@@ -1,7 +1,7 @@
 'use client'
 
-import { FormEvent, useEffect, useRef, useState } from 'react'
-import { AlertCircle, ArrowRight, Bot, Check, Clock3, LoaderCircle, LockKeyhole, MessageCircle, Send, ShieldCheck, Sparkles, Wallet } from 'lucide-react'
+import { FormEvent, ReactNode, useEffect, useRef, useState } from 'react'
+import { AlertCircle, ArrowRight, Bot, Check, Clock3, LoaderCircle, LockKeyhole, MessageCircle, RotateCcw, Send, ShieldCheck, Sparkles, Wallet } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { createOrder, getOrderStatus } from '@/lib/api'
 import { ROBINHOOD_CHAIN_ID, paymentErrorMessage, useRelayPayment } from '@/lib/relay'
@@ -12,7 +12,7 @@ type PaymentCurrency = 'USDG' | 'ETH'
 type CheckoutPhase = 'idle' | 'wallet_prompting' | 'relay_bridging' | 'completed' | 'failed'
 type CheckoutState = { phase: CheckoutPhase; detail?: string; orderId?: string }
 type AssistantWidget = { widget: string; data: Record<string, unknown> }
-type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; widgets: AssistantWidget[] }
+type ChatMessage = { id: string; role: 'user' | 'assistant'; text: string; widgets: AssistantWidget[]; retryText?: string }
 type Intent = {
   familyName: string; brandName: string; faceValue: number; email: string
   paymentCurrency: PaymentCurrency; paymentAmount: number; timeEstimate: number
@@ -24,16 +24,275 @@ function shortCurrency(value: number, currency: PaymentCurrency) {
   return formatted + ' ' + currency
 }
 
-function ChatBubble({ message, busyLabel, checkoutStates, onBrand, onDenomination, onConfirm }: {
+function parseInlineMarkdown(text: string): ReactNode[] {
+  const tokenRegex = /(`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_)/g
+  const parts = text.split(tokenRegex)
+
+  return parts.map((part, i) => {
+    if (!part) return null
+
+    if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+      return (
+        <code
+          key={i}
+          className="assistant-inline-code"
+          style={{
+            padding: '2px 5px',
+            borderRadius: '4px',
+            background: 'rgba(0, 0, 0, 0.06)',
+            fontFamily: 'monospace',
+            fontSize: '0.9em',
+          }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      )
+    }
+
+    const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
+    if (linkMatch) {
+      const label = linkMatch[1]
+      let href = linkMatch[2].trim()
+      if (!href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('/')) {
+        href = 'https://' + href
+      }
+      return (
+        <a
+          key={i}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="assistant-link"
+          style={{ color: '#2b2bf5', textDecoration: 'underline' }}
+        >
+          {parseInlineMarkdown(label)}
+        </a>
+      )
+    }
+
+    if (
+      (part.startsWith('**') && part.endsWith('**') && part.length >= 4) ||
+      (part.startsWith('__') && part.endsWith('__') && part.length >= 4)
+    ) {
+      return (
+        <strong key={i} style={{ fontWeight: 650, color: 'inherit' }}>
+          {parseInlineMarkdown(part.slice(2, -2))}
+        </strong>
+      )
+    }
+
+    if (
+      (part.startsWith('*') && part.endsWith('*') && part.length >= 2) ||
+      (part.startsWith('_') && part.endsWith('_') && part.length >= 2)
+    ) {
+      return <em key={i}>{parseInlineMarkdown(part.slice(1, -1))}</em>
+    }
+
+    return part
+  }).filter(Boolean)
+}
+
+function MarkdownText({ text }: { text: string }) {
+  if (!text) return null
+
+  const lines = text.split(/\r?\n/)
+  const elements: ReactNode[] = []
+
+  let inCodeBlock = false
+  let codeBlockLines: string[] = []
+  let listBuffer: { ordered: boolean; text: string }[] = []
+
+  const flushList = () => {
+    if (listBuffer.length === 0) return
+    const isOrdered = listBuffer[0].ordered
+    const items = listBuffer.map((item, idx) => (
+      <li key={idx} style={{ marginBottom: '3px', lineHeight: 1.5 }}>
+        {parseInlineMarkdown(item.text)}
+      </li>
+    ))
+    const key = `list-${elements.length}`
+    if (isOrdered) {
+      elements.push(
+        <ol key={key} className="assistant-md-ol" style={{ margin: '4px 0 8px 0', paddingLeft: '18px', listStyleType: 'decimal' }}>
+          {items}
+        </ol>
+      )
+    } else {
+      elements.push(
+        <ul key={key} className="assistant-md-ul" style={{ margin: '4px 0 8px 0', paddingLeft: '18px', listStyleType: 'disc' }}>
+          {items}
+        </ul>
+      )
+    }
+    listBuffer = []
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i]
+    const trimmed = rawLine.trim()
+
+    if (trimmed.startsWith('```')) {
+      if (inCodeBlock) {
+        elements.push(
+          <pre
+            key={`code-${elements.length}`}
+            className="assistant-md-pre"
+            style={{
+              margin: '6px 0',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              background: '#1e2433',
+              color: '#f1f5f9',
+              overflowX: 'auto',
+              fontFamily: 'monospace',
+              fontSize: '11.5px',
+              whiteSpace: 'pre',
+            }}
+          >
+            <code>{codeBlockLines.join('\n')}</code>
+          </pre>
+        )
+        codeBlockLines = []
+        inCodeBlock = false
+      } else {
+        flushList()
+        inCodeBlock = true
+      }
+      continue
+    }
+
+    if (inCodeBlock) {
+      codeBlockLines.push(rawLine)
+      continue
+    }
+
+    if (!trimmed) {
+      flushList()
+      continue
+    }
+
+    const ulMatch = rawLine.match(/^\s*[-*]\s+(.*)$/)
+    if (ulMatch) {
+      listBuffer.push({ ordered: false, text: ulMatch[1] })
+      continue
+    }
+
+    const olMatch = rawLine.match(/^\s*\d+\.\s+(.*)$/)
+    if (olMatch) {
+      listBuffer.push({ ordered: true, text: olMatch[1] })
+      continue
+    }
+
+    flushList()
+
+    if (trimmed.startsWith('### ')) {
+      elements.push(
+        <h4 key={`h4-${elements.length}`} style={{ margin: '8px 0 3px 0', fontSize: '13px', fontWeight: 650, lineHeight: 1.3 }}>
+          {parseInlineMarkdown(trimmed.slice(4))}
+        </h4>
+      )
+      continue
+    }
+    if (trimmed.startsWith('## ')) {
+      elements.push(
+        <h3 key={`h3-${elements.length}`} style={{ margin: '10px 0 4px 0', fontSize: '14px', fontWeight: 650, lineHeight: 1.3 }}>
+          {parseInlineMarkdown(trimmed.slice(3))}
+        </h3>
+      )
+      continue
+    }
+    if (trimmed.startsWith('# ')) {
+      elements.push(
+        <h2 key={`h2-${elements.length}`} style={{ margin: '12px 0 4px 0', fontSize: '15px', fontWeight: 700, lineHeight: 1.3 }}>
+          {parseInlineMarkdown(trimmed.slice(2))}
+        </h2>
+      )
+      continue
+    }
+
+    if (trimmed.startsWith('> ')) {
+      elements.push(
+        <blockquote
+          key={`quote-${elements.length}`}
+          style={{
+            margin: '6px 0',
+            paddingLeft: '10px',
+            borderLeft: '3px solid #8993d6',
+            color: '#5a667f',
+            fontStyle: 'italic',
+          }}
+        >
+          {parseInlineMarkdown(trimmed.slice(2))}
+        </blockquote>
+      )
+      continue
+    }
+
+    elements.push(
+      <p key={`p-${elements.length}`} style={{ margin: '0 0 5px 0', lineHeight: 1.55 }}>
+        {parseInlineMarkdown(rawLine)}
+      </p>
+    )
+  }
+
+  flushList()
+  if (inCodeBlock && codeBlockLines.length > 0) {
+    elements.push(
+      <pre
+        key={`code-${elements.length}`}
+        className="assistant-md-pre"
+        style={{
+          margin: '6px 0',
+          padding: '10px 12px',
+          borderRadius: '8px',
+          background: '#1e2433',
+          color: '#f1f5f9',
+          overflowX: 'auto',
+          fontFamily: 'monospace',
+          fontSize: '11.5px',
+          whiteSpace: 'pre',
+        }}
+      >
+        <code>{codeBlockLines.join('\n')}</code>
+      </pre>
+    )
+  }
+
+  return (
+    <div className="assistant-markdown-body" style={{ whiteSpace: 'normal' }}>
+      {elements}
+    </div>
+  )
+}
+
+function ChatBubble({ message, busyLabel, checkoutStates, onBrand, onDenomination, onConfirm, onRetry }: {
   message: ChatMessage; busyLabel: string; checkoutStates: Record<string, CheckoutState>
   onBrand: (name: string) => void; onDenomination: (value: number) => void
   onConfirm: (intent: Intent, key: string) => void
+  onRetry?: (messageId: string, retryText: string) => void
 }) {
   return (
     <div className={'assistant-message-row ' + (message.role === 'user' ? 'is-user' : '')}>
       {message.role === 'assistant' && <div className="assistant-avatar"><Bot size={16} /></div>}
       <div className={'assistant-message-stack ' + (message.role === 'user' ? 'user-stack' : '')}>
-        {message.text && <div className={'assistant-bubble ' + (message.role === 'user' ? 'user-bubble' : 'bot-bubble')}>{message.text}</div>}
+        {message.text && (
+          <div className={'assistant-bubble ' + (message.role === 'user' ? 'assistant-user-bubble user-bubble' : 'assistant-bot-bubble bot-bubble')}>
+            {message.role === 'assistant' ? <MarkdownText text={message.text} /> : message.text}
+            {message.role === 'assistant' && message.retryText && (
+              <div>
+                <button
+                  type="button"
+                  className="assistant-retry-button"
+                  onClick={() => onRetry?.(message.id, message.retryText!)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                >
+                  <RotateCcw size={12} />
+                  <span>Retry</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {message.role === 'assistant' && !message.text && busyLabel && (
           <div className="assistant-thinking"><LoaderCircle size={14} className="animate-spin" />{busyLabel}</div>
         )}
@@ -144,6 +403,31 @@ function readSseBlock(block: string): string | null {
   return data || null
 }
 
+function mapErrorToFriendly(raw: unknown, isNetworkFetch = false): string {
+  const text = (
+    raw instanceof Error ? raw.message : typeof raw === 'string' ? raw : JSON.stringify(raw ?? '')
+  ).toLowerCase()
+
+  if (
+    /429|rate_limit|rate_limit_exceeded|request too large|too many requests|lot of requests|busy/.test(
+      text,
+    )
+  ) {
+    return 'The assistant is busy right now. Wait a few seconds and tap Retry.'
+  }
+
+  if (
+    isNetworkFetch ||
+    /failed to fetch|networkerror|econnrefused|could not reach|reach the assistant|connection|network error|offline|502|503|504/.test(
+      text,
+    )
+  ) {
+    return 'Could not reach the assistant. Check your connection and tap Retry.'
+  }
+
+  return "The assistant couldn't answer that. Tap Retry to try again."
+}
+
 export function ShoppingAssistant({ walletAddress, savedEmail }: { walletAddress?: string; savedEmail?: string }) {
   const { address, isConnected } = useAccount()
   const payWithRelay = useRelayPayment()
@@ -165,7 +449,7 @@ export function ShoppingAssistant({ walletAddress, savedEmail }: { walletAddress
     setCheckoutStates((current) => ({ ...current, [key]: state }))
   }
 
-  async function sendMessage(raw: string) {
+  async function sendMessage(raw: string, baseMessages?: ChatMessage[]) {
     const content = raw.trim()
     if (!content || loading) return
     setInput('')
@@ -173,14 +457,15 @@ export function ShoppingAssistant({ walletAddress, savedEmail }: { walletAddress
     setLoading(true)
     setBusyLabel('Thinking')
 
+    const base = baseMessages ?? messages
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', text: content, widgets: [] }
     const assistantId = crypto.randomUUID()
     const assistantMessage: ChatMessage = { id: assistantId, role: 'assistant', text: '', widgets: [] }
-    const nextMessages = [...messages, userMessage, assistantMessage]
+    const nextMessages = [...base, userMessage, assistantMessage]
     setMessages(nextMessages)
 
     const history: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = nextMessages
-      .filter((message) => message.text.trim().length > 0)
+      .filter((message) => message.text.trim().length > 0 && !message.retryText)
       .map((message) => ({ role: message.role, content: message.text }))
     if (savedEmail) {
       history.unshift({ role: 'system', content: 'The saved delivery email is ' + savedEmail + '. Use it for card delivery; ask only for an email if none is available.' })
@@ -188,18 +473,31 @@ export function ShoppingAssistant({ walletAddress, savedEmail }: { walletAddress
 
     try {
       // This same-origin Next.js route proxies the request to the backend.
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-        body: JSON.stringify({ messages: history, walletAddress: activeAddress, paymentCurrency: currency, stream: true }),
-      })
+      let response: Response
+      try {
+        response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          body: JSON.stringify({ messages: history, walletAddress: activeAddress, paymentCurrency: currency, stream: true }),
+        })
+      } catch (err) {
+        const friendly = mapErrorToFriendly(err, true)
+        setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, text: friendly, retryText: content } : message))
+        return
+      }
+
       if (!response.ok || !response.body) {
-        let message = 'The assistant is temporarily unavailable. Please try again.'
+        let errBody = ''
         try {
           const payload = await response.json()
-          if (payload.error) message = String(payload.error)
-        } catch {}
-        throw new Error(message)
+          errBody = payload.error ? String(payload.error) : JSON.stringify(payload)
+        } catch {
+          errBody = await response.text().catch(() => '')
+        }
+        const isNetwork = response.status === 502 || response.status === 503 || response.status === 504
+        const friendly = mapErrorToFriendly(`${response.status} ${errBody}`, isNetwork)
+        setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, text: friendly, retryText: content } : message))
+        return
       }
 
       const reader = response.body.getReader()
@@ -227,10 +525,10 @@ export function ShoppingAssistant({ walletAddress, savedEmail }: { walletAddress
             : message))
           setBusyLabel('')
         } else if (event.type === 'error') {
-          const errorText = String(event.error ?? 'The assistant encountered an error.')
-          const details = typeof event.details === 'string' ? event.details : ''
+          const raw = [event.error, event.details].filter(Boolean).map(String).join(' ')
+          const friendly = mapErrorToFriendly(raw)
           setMessages((current) => current.map((message) => message.id === assistantId
-            ? { ...message, text: message.text + (message.text ? '\n\n' : '') + errorText + (details ? ': ' + details : '') }
+            ? { ...message, text: friendly, retryText: content }
             : message))
           setBusyLabel('')
         }
@@ -247,13 +545,34 @@ export function ShoppingAssistant({ walletAddress, savedEmail }: { walletAddress
       buffer += decoder.decode()
       if (buffer.trim()) handleBlock(buffer)
     } catch (error) {
-      const errorText = error instanceof Error ? error.message : 'The assistant is temporarily unavailable.'
-      setNetworkError(errorText)
-      setMessages((current) => current.map((message) => message.id === assistantId ? { ...message, text: message.text || errorText } : message))
+      const friendly = mapErrorToFriendly(error, true)
+      setMessages((current) => current.map((message) => message.id === assistantId
+        ? { ...message, text: message.retryText ? message.text : friendly, retryText: content }
+        : message))
     } finally {
       setLoading(false)
       setBusyLabel('')
     }
+  }
+
+  function handleRetry(failedMessageId: string, textToRetry: string) {
+    if (loading) return
+    const assistantIdx = messages.findIndex((m) => m.id === failedMessageId)
+    if (assistantIdx === -1) {
+      void sendMessage(textToRetry)
+      return
+    }
+
+    let userIdx = -1
+    for (let i = assistantIdx - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        userIdx = i
+        break
+      }
+    }
+
+    const trimmed = messages.filter((_, idx) => idx !== assistantIdx && idx !== userIdx)
+    void sendMessage(textToRetry, trimmed)
   }
 
   async function confirmAndPay(intent: Intent, key: string) {
@@ -339,6 +658,7 @@ export function ShoppingAssistant({ walletAddress, savedEmail }: { walletAddress
               onBrand={(name) => void sendMessage('I would like the ' + name + ' gift card.')}
               onDenomination={(value) => void sendMessage('I would like the $' + value + ' denomination.')}
               onConfirm={(intent, key) => void confirmAndPay(intent, key)}
+              onRetry={(id, text) => handleRetry(id, text)}
             />
           ))}
         </div>
