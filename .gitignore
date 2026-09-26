@@ -19,6 +19,8 @@ dist/
 .idea/
 
 tech-updates.md
+non-privacy.md
+privacy.md
 docs/
 scripts/
 
