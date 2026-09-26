@@ -49,7 +49,7 @@ export function ReferralView({ address }: { address?: string }) {
         </div>
         <h1 className="text-2xl font-bold">Invite Friends, Earn Points</h1>
         <p className="text-xs text-white/80 mt-1 max-w-lg">
-          Your friends get 2% off their first order. You earn 1 point for every $1 they pay, added when their card is delivered.
+          Share your code. You earn 1 point for every $1 your friends pay, added when their card is delivered.
         </p>
       </div>
 
@@ -108,7 +108,7 @@ export function ReferralView({ address }: { address?: string }) {
           {/* Social Share Buttons */}
           <div className="flex items-center gap-2 pt-1">
             <a
-              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Buy gift cards with crypto on @USDBT with 2% off! Use my referral link: ${referralLink}`)}`}
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Buy gift cards with crypto on @USDBT. Use my referral link: ${referralLink}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium hover:bg-gray-800 transition-colors"

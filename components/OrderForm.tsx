@@ -25,6 +25,7 @@ import {
 } from '@/lib/api'
 import { formatAmount } from '@/lib/relay'
 import { getSimSpent } from '@/lib/auth'
+import { FEATURES } from '@/lib/features'
 
 function SectionLabel({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
   return (
@@ -144,7 +145,7 @@ export function OrderForm({
   const volumeDiscount = (subtotal * volumeDiscountPct) / 100
 
   // Referral discount (2%)
-  const referralDiscount = appliedReferral ? (subtotal * (referralDiscountPct / 100)) : 0
+  const referralDiscount = FEATURES.checkoutDiscounts && appliedReferral ? (subtotal * (referralDiscountPct / 100)) : 0
 
   // Loyalty discount (100 pts = $1, max 20% of subtotal)
   const maxLoyaltyDiscount = subtotal * 0.20
@@ -256,10 +257,10 @@ export function OrderForm({
         paymentCurrency: currency,
         paymentChain: chain,
         quantity,
-        loyaltyPointsUsed: useLoyaltyPoints ? pointsToRedeem : 0,
+        loyaltyPointsUsed: FEATURES.checkoutDiscounts && useLoyaltyPoints ? pointsToRedeem : 0,
         referralCode: appliedReferral || undefined,
-        isNft,
-        isEscrow: isEscrow || finalPrice >= 250,
+        isNft: FEATURES.nftCards && isNft,
+        isEscrow: FEATURES.escrow && (isEscrow || finalPrice >= 250),
       })
       onOrder(order, email)
     } catch (err) {
@@ -341,6 +342,7 @@ export function OrderForm({
               <div className="flex items-center justify-between mb-2">
                 <SectionLabel icon={DollarSign} text="Card Value" />
                 {/* Bulk Quantity Stepper */}
+                {FEATURES.bulkOrders && (
                 <div className="flex items-center gap-1.5 bg-gray-100 rounded-lg p-0.5">
                   <button
                     type="button"
@@ -358,6 +360,7 @@ export function OrderForm({
                     +
                   </button>
                 </div>
+                )}
               </div>
 
               {p.denominations.length > 0 ? (
@@ -452,7 +455,7 @@ export function OrderForm({
             <div className="border-t border-gray-100" />
 
             {/* Loyalty Points Redemption */}
-            {loyalty && loyalty.pointsBalance >= 50 && (
+            {FEATURES.checkoutDiscounts && loyalty && loyalty.pointsBalance >= 50 && (
               <div className="bg-[#f6f7ff] rounded-xl p-3 border border-[#e4e7ff]">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -501,7 +504,7 @@ export function OrderForm({
               </div>
               {appliedReferral && (
                 <p className="text-[11px] text-emerald-600 mt-1 flex items-center gap-1 font-medium">
-                  <Check size={11} /> Code {appliedReferral} applied! 2% discount (-${referralDiscount.toFixed(2)})
+                  <Check size={11} /> Code {appliedReferral} applied. {FEATURES.checkoutDiscounts ? `2% discount (-$${referralDiscount.toFixed(2)})` : 'Your friend earns reward points when your card is delivered.'}
                 </p>
               )}
               {referralError && (
@@ -512,8 +515,9 @@ export function OrderForm({
             <div className="border-t border-gray-100" />
 
             {/* Advanced Options: NFT Voucher & Escrow */}
+            {(FEATURES.nftCards || FEATURES.escrow) && (<>
             <div className="space-y-2">
-              <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 transition-colors">
+              {FEATURES.nftCards && <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 transition-colors">
                 <input
                   type="checkbox"
                   checked={isNft}
@@ -529,9 +533,9 @@ export function OrderForm({
                     Get an on-chain digital card token. Hold, transfer to friends, or unwrap code anytime.
                   </p>
                 </div>
-              </label>
+              </label>}
 
-              <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 transition-colors">
+              {FEATURES.escrow && <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 transition-colors">
                 <input
                   type="checkbox"
                   checked={isEscrow || finalPrice >= 250}
@@ -549,10 +553,11 @@ export function OrderForm({
                     Crypto locked in escrow until you confirm the code works or 24h expires.
                   </p>
                 </div>
-              </label>
+              </label>}
             </div>
 
             <div className="border-t border-gray-100" />
+            </>)}
 
             {/* Email */}
             <div>

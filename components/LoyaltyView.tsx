@@ -118,7 +118,7 @@ export function LoyaltyView({ address }: { address?: string }) {
             <p className="font-semibold">$USDBT has not launched yet, so you cannot receive or use $USDBT today.</p>
             <p className="mt-0.5 text-amber-800">
               Until launch, every reward is paid in points. When $USDBT launches, you can convert your points to $USDBT
-              (100 points = $1 of $USDBT at the launch price). You can also spend points at checkout any time.
+              (100 points = $1 of $USDBT at the price when you convert).
             </p>
           </div>
         </div>
@@ -137,7 +137,7 @@ export function LoyaltyView({ address }: { address?: string }) {
             </div>
             <h1 className="text-2xl font-bold">Rewards</h1>
             <p className="text-xs text-white/80 mt-1 max-w-md">
-              Earn points on every gift card. Spend them at checkout now, or convert them to $USDBT after launch.
+              Earn points on every gift card, then convert them to $USDBT after launch.
             </p>
           </div>
 
@@ -203,11 +203,7 @@ export function LoyaltyView({ address }: { address?: string }) {
             </li>
             <li className="flex items-start gap-2">
               <CheckCircle2 size={14} className="text-emerald-500 mt-0.5 flex-shrink-0" />
-              <span><strong>Refer friends:</strong> earn 1 point per $1 your friends pay. They get 2% off their first order.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle2 size={14} className="text-emerald-500 mt-0.5 flex-shrink-0" />
-              <span><strong>Use at checkout:</strong> 100 points = $1.00 off, up to 20% of an order.</span>
+              <span><strong>Refer friends:</strong> earn 1 point per $1 your friends pay on their first order and after.</span>
             </li>
             <li className="flex items-start gap-2">
               <CheckCircle2 size={14} className="text-emerald-500 mt-0.5 flex-shrink-0" />

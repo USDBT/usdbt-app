@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle, Loader2, Shield, AlertTriangle, Check } from 'lucide-react'
 import { getOrderProgress, releaseEscrow, disputeEscrow, type OrderProgress } from '@/lib/api'
+import { FEATURES } from '@/lib/features'
 
 const POLL_INTERVAL = 5000
 
@@ -133,6 +134,7 @@ export function SuccessScreen({
           {error && <p className="text-[11px] mt-2 text-red-400">{error}</p>}
         </div>
 
+        {FEATURES.escrow && (<>
         {/* Escrow Controls */}
         <div className="w-full rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 mb-4 text-left">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-900 mb-1">
@@ -196,6 +198,7 @@ export function SuccessScreen({
             </div>
           </div>
         )}
+        </>)}
 
         <button
           onClick={onReset}
