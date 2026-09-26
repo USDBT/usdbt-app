@@ -16,15 +16,21 @@ const insertedRows: any[] = []
 // wholesale without them). Fake the network instead — cryptorefills.ts and
 // relay.ts are both thin fetch wrappers, so this exercises their real
 // request-building/response-parsing code too.
+const fakeSql: any = Object.assign(
+  async (_strings: TemplateStringsArray, ..._values: unknown[]) => {
+    insertedRows.push(_values)
+    return [{ id: 'order_1', expires_at: new Date('2026-01-01T00:00:00Z').toISOString() }]
+  },
+  {
+    json: (v: unknown) => v,
+    // Order inserts run inside sql.begin (see lib/rewards.ts); run the callback on the same fake
+    begin: async (fn: (tx: unknown) => unknown) => fn(fakeSql),
+  },
+)
+
 mock.module('../lib/db', () => ({
   requiredEnv: (name: string) => process.env[name] ?? '',
-  sql: Object.assign(
-    async (_strings: TemplateStringsArray, ..._values: unknown[]) => {
-      insertedRows.push(_values)
-      return [{ id: 'order_1', expires_at: new Date('2026-01-01T00:00:00Z').toISOString() }]
-    },
-    { json: (v: unknown) => v },
-  ),
+  sql: fakeSql,
 }))
 
 mock.module('../lib/email', () => ({

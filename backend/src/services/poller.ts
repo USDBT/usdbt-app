@@ -2,6 +2,7 @@ import { sql } from '../lib/db'
 import { getCROrder } from '../lib/cryptorefills'
 import { ORDER_STATUS } from '../lib/order-status'
 import { sendDeliveryEmail } from '../lib/email'
+import { refundRedeemedPoints } from '../lib/rewards'
 
 const POLL_INTERVAL_MS = 15_000
 
@@ -67,6 +68,7 @@ async function pollActiveOrders(): Promise<void> {
           WHERE id = ${order.id}
         `
         console.log(`[poller] expired order ${order.id}`)
+        await refundRedeemedPoints(order.id)
         continue
       }
 
@@ -79,6 +81,10 @@ async function pollActiveOrders(): Promise<void> {
         UPDATE orders SET status = ${newStatus}
         WHERE id = ${order.id}
       `
+
+      if (newStatus === ORDER_STATUS.FAILED || newStatus === ORDER_STATUS.REFUNDED) {
+        await refundRedeemedPoints(order.id)
+      }
 
       if (TERMINAL.has(newStatus)) {
         console.log(`[poller] order ${order.id} → ${newStatus} (CR: ${crOrder.order_state})`)
