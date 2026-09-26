@@ -16,7 +16,7 @@ import {
 import { randomBytes } from 'crypto'
 import {
   MAX_LOYALTY_DISCOUNT_SHARE, POINTS_PER_USD, REFERRAL_DISCOUNT_SHARE, PointsUnavailableError,
-  getPointsBalance, insertOrderRedeemingPoints, isFirstOrder, resolveReferrer,
+  creditOrderRewards, getPointsBalance, insertOrderRedeemingPoints, isFirstOrder, resolveReferrer,
 } from '../lib/rewards'
 
 export const ordersRouter = Router()
@@ -77,6 +77,8 @@ export async function createOrder(req: Request, res: Response) {
     validReferralCode = String(referralCode).trim().toUpperCase()
     referralDiscountAmount = parseFloat((subtotal * REFERRAL_DISCOUNT_SHARE).toFixed(2))
   }
+  // Only a referrer whose discount was applied earns referral points when the order is delivered
+  const storedReferrer = validReferralCode ? referrerWallet : null
 
   // 3. Loyalty points redemption (100 points = $1, max 20% of subtotal), capped at the real balance.
   // The points are deducted in the same transaction that inserts the order.
@@ -121,14 +123,14 @@ export async function createOrder(req: Request, res: Response) {
            payment_chain_id, payment_currency, payment_amount, fee_rate, status, expires_at,
            payment_address, coin_amount, quantity, volume_discount_pct, loyalty_points_used,
            loyalty_discount_amount, referral_code, referral_discount_amount, is_nft, nft_token_id,
-           is_escrow, escrow_status, escrow_release_at, payment_chain, solana_deposit_address)
+           is_escrow, escrow_status, escrow_release_at, payment_chain, solana_deposit_address, referrer_wallet)
         VALUES
           (${walletAddress}, ${email}, 'gift_card', ${familyName}, ${brandName}, ${effectiveUsdTotal},
            ${chainId}, ${currency}, ${coinAmount}, 100, ${ORDER_STATUS.PENDING_PAYMENT}, ${expiresAt},
            ${solanaDeposit ?? simulateConfig.paymentAddress}, ${coinAmount}, ${selectedQty},
            ${volumeDiscountPct}, ${pointsToUse}, ${loyaltyDiscountAmount}, ${validReferralCode},
            ${referralDiscountAmount}, ${isNft}, ${nftTokenId}, ${isEscrow || effectiveUsdTotal >= 250},
-           ${escrowStatus}, ${escrowReleaseAt}, ${selectedChain}, ${solanaDeposit})
+           ${escrowStatus}, ${escrowReleaseAt}, ${selectedChain}, ${solanaDeposit}, ${storedReferrer})
         RETURNING id, expires_at, payment_address, coin_amount
       `)
       .catch((err) => err instanceof PointsUnavailableError ? null : Promise.reject(err))
@@ -153,29 +155,7 @@ export async function createOrder(req: Request, res: Response) {
         await sql`UPDATE orders SET status = ${ORDER_STATUS.DELIVERED} WHERE id = ${orderId}`
         sendDeliveryEmail(email, { brandName, faceValue: effectiveUsdTotal }).catch(() => {})
 
-        // Award loyalty points: 10 points per dollar spent
-        const pointsEarned = Math.floor(effectiveUsdTotal * 10)
-        await sql`
-          INSERT INTO user_loyalty (wallet_address, points_balance, lifetime_points, tier)
-          VALUES (${walletAddress.toLowerCase()}, ${pointsEarned}, ${pointsEarned}, 'bronze')
-          ON CONFLICT (wallet_address) DO UPDATE
-          SET points_balance = user_loyalty.points_balance + ${pointsEarned},
-              lifetime_points = user_loyalty.lifetime_points + ${pointsEarned},
-              updated_at = now()
-        `
-        await sql`
-          INSERT INTO loyalty_transactions (wallet_address, order_id, points_delta, action)
-          VALUES (${walletAddress.toLowerCase()}, ${orderId}, ${pointsEarned}, 'earn_order')
-        `
-
-        // If referral code used, credit referrer with 1.5% cashback
-        if (validReferralCode && referrerWallet) {
-          const rewardAmount = parseFloat((effectiveUsdTotal * 0.015).toFixed(2))
-          await sql`
-            INSERT INTO referrals (referrer_wallet, referred_wallet, order_id, reward_amount, status)
-            VALUES (${referrerWallet}, ${walletAddress.toLowerCase()}, ${orderId}, ${rewardAmount}, 'completed')
-          `
-        }
+        await creditOrderRewards(orderId)
       } catch {}
     }, simulateConfig.fulfillmentDelayMs)
 
@@ -266,7 +246,7 @@ export async function createOrder(req: Request, res: Response) {
          fee_rate, status, expires_at, cr_order_id, payment_address, coin_amount,
          relay_request_id, relay_steps, quantity, volume_discount_pct, loyalty_points_used,
          loyalty_discount_amount, referral_code, referral_discount_amount, is_nft, nft_token_id,
-         is_escrow, escrow_status, escrow_release_at, payment_chain)
+         is_escrow, escrow_status, escrow_release_at, payment_chain, referrer_wallet)
       VALUES
         (${walletAddress}, ${email}, 'gift_card', ${familyName}, ${brandName}, ${effectiveUsdTotal},
          ${ROBINHOOD_CHAIN_ID}, ${relayCurrency}, ${Number(exactPaymentAmount)}, ${exactPaymentAmount},
@@ -274,7 +254,7 @@ export async function createOrder(req: Request, res: Response) {
          ${crDepositAddress}, ${crCoinAmount}, ${relayQuote.requestId}, ${sql.json(relayQuote.steps as any)},
          ${selectedQty}, ${volumeDiscountPct}, ${pointsToUse}, ${loyaltyDiscountAmount},
          ${validReferralCode}, ${referralDiscountAmount}, ${isNft}, ${nftTokenId},
-         ${isEscrow || effectiveUsdTotal >= 250}, ${escrowStatus}, ${escrowReleaseAt}, ${selectedChain})
+         ${isEscrow || effectiveUsdTotal >= 250}, ${escrowStatus}, ${escrowReleaseAt}, ${selectedChain}, ${storedReferrer})
       RETURNING id, expires_at
     `)
     .catch((err) => err instanceof PointsUnavailableError ? null : Promise.reject(err))
