@@ -450,6 +450,40 @@ export async function transferNftCard(tokenId: string, fromAddress: string, toAd
   return res.json()
 }
 
+// ----------------- Compliance & AML -----------------
+export interface ComplianceLimits {
+  walletAddress: string
+  tier: string
+  dailyLimitUsd: number
+  spentLast24hUsd: number
+  remainingQuotaUsd: number
+  sanctionsCheck: string
+  riskScore: string
+  kycRequired: boolean
+  policy: string
+}
+
+export async function getComplianceLimits(address: string): Promise<ComplianceLimits> {
+  const res = await fetch(`/api/compliance/limits/${address}`)
+  if (!res.ok) throw new Error('Failed to load compliance info')
+  return res.json()
+}
+
+export async function screenWalletCompliance(walletAddress: string): Promise<{
+  status: string
+  walletAddress: string
+  riskScore: number
+  ofacMatch: boolean
+}> {
+  const res = await fetch(`/api/compliance/screen`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ walletAddress }),
+  })
+  if (!res.ok) throw new Error('Wallet AML screening flagged an issue')
+  return res.json()
+}
+
 // ----------------- Merchant API -----------------
 export interface MerchantProfile {
   id: string
