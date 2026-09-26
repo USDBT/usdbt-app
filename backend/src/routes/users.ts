@@ -10,13 +10,15 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 usersRouter.get('/:address/stats', requireAuth, async (req, res) => {
   const addr = req.params.address
-  if (!isAddress(addr)) return res.status(400).json({ error: 'invalid address' })
+  if (!isAddress(addr) && !addr.startsWith('USDBT')) return res.status(400).json({ error: 'invalid address' })
   if ((req as any).walletAddress?.toLowerCase() !== addr.toLowerCase()) {
     return res.status(403).json({ error: 'forbidden' })
   }
 
   const orders = await sql`
-    SELECT id, brand_name, face_value, coin_amount, status, created_at
+    SELECT id, brand_name, face_value, coin_amount, status, created_at,
+           payment_chain, payment_currency, quantity, volume_discount_pct,
+           loyalty_discount_amount, referral_discount_amount, is_nft, is_escrow
     FROM orders
     WHERE lower(wallet_address) = lower(${addr})
     ORDER BY created_at DESC
@@ -49,40 +51,65 @@ usersRouter.get('/:address/stats', requireAuth, async (req, res) => {
     }
   }
 
-  // Total spent (delivered) + top brands by spend
+  // Spend & Savings metrics
   let totalSpentUsdc = 0
+  let totalSavedUsd = 0
   const brandSpend = new Map<string, number>()
+  const chainSpend: Record<string, number> = { robinhood: 0, base: 0, ethereum: 0, solana: 0 }
+  const currencySpend: Record<string, number> = { USDG: 0, ETH: 0, USDC: 0, SOL: 0, USDT: 0 }
+
   for (const o of orders) {
-    if (!isCompleted(o.status)) continue
-    const amt = Number(o.coin_amount) || 0
-    totalSpentUsdc += amt
-    brandSpend.set(o.brand_name, (brandSpend.get(o.brand_name) ?? 0) + amt)
+    const amt = Number(o.face_value || o.coin_amount) || 0
+    if (isCompleted(o.status)) {
+      totalSpentUsdc += amt
+      brandSpend.set(o.brand_name, (brandSpend.get(o.brand_name) ?? 0) + amt)
+
+      const chain = (o.payment_chain || 'robinhood').toLowerCase()
+      chainSpend[chain] = (chainSpend[chain] ?? 0) + amt
+
+      const curr = (o.payment_currency || 'USDG').toUpperCase()
+      currencySpend[curr] = (currencySpend[curr] ?? 0) + (Number(o.coin_amount) || amt)
+    }
+
+    const volDiscount = ((Number(o.face_value) * Number(o.volume_discount_pct || 0)) / 100) || 0
+    const loyaltyDiscount = Number(o.loyalty_discount_amount || 0)
+    const refDiscount = Number(o.referral_discount_amount || 0)
+    totalSavedUsd += (volDiscount + loyaltyDiscount + refDiscount)
   }
+
   const topBrands = Array.from(brandSpend.entries())
     .map(([label, value]) => ({ label, value: Number(value.toFixed(2)) }))
     .sort((a, b) => b.value - a.value)
-    .slice(0, 4)
+    .slice(0, 5)
 
   res.json({
     totalOrders: orders.length,
-    recentOrders: orders.slice(0, 6).map((o) => ({
+    recentOrders: orders.slice(0, 10).map((o) => ({
       id: o.id,
       brandName: o.brand_name,
       faceValue: Number(o.face_value),
       coinAmount: Number(o.coin_amount) || 0,
+      paymentCurrency: o.payment_currency || 'USDG',
+      paymentChain: o.payment_chain || 'robinhood',
       status: o.status,
+      quantity: o.quantity || 1,
+      isNft: o.is_nft || false,
+      isEscrow: o.is_escrow || false,
       createdAt: o.created_at,
     })),
     ordersByDay: ordersByDay.map(({ label, count }) => ({ label, count })),
     statusMix,
     totalSpentUsdc: Number(totalSpentUsdc.toFixed(2)),
+    totalSavedUsd: Number(totalSavedUsd.toFixed(2)),
     topBrands,
+    spendByChain: chainSpend,
+    spendByCurrency: currencySpend,
   })
 })
 
 usersRouter.get('/:address', async (req, res) => {
   const addr = req.params.address
-  if (!isAddress(addr)) return res.status(400).json({ error: 'invalid address' })
+  if (!isAddress(addr) && !addr.startsWith('USDBT')) return res.status(400).json({ error: 'invalid address' })
 
   const [user] = await sql`
     SELECT wallet_address, email FROM users WHERE lower(wallet_address) = lower(${addr})
@@ -94,7 +121,7 @@ usersRouter.get('/:address', async (req, res) => {
 usersRouter.post('/', async (req, res) => {
   const { walletAddress, email } = req.body
   if (!walletAddress || !email) return res.status(400).json({ error: 'walletAddress and email are required' })
-  if (!isAddress(walletAddress)) return res.status(400).json({ error: 'invalid walletAddress' })
+  if (!isAddress(walletAddress) && !walletAddress.startsWith('USDBT')) return res.status(400).json({ error: 'invalid walletAddress' })
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'invalid email' })
 
   const [user] = await sql`

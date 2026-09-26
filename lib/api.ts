@@ -245,11 +245,19 @@ export interface OrderStats {
     coinAmount: number
     status: OrderStatus['status']
     createdAt: string
+    paymentCurrency?: string
+    paymentChain?: string
+    quantity?: number
+    isNft?: boolean
+    isEscrow?: boolean
   }>
   ordersByDay: Array<{ label: string; count: number }>
   statusMix: { completed: number; pending: number; failed: number }
   totalSpentUsdc: number
+  totalSavedUsd?: number
   topBrands: Array<{ label: string; value: number }>
+  spendByChain?: Record<string, number>
+  spendByCurrency?: Record<string, number>
 }
 
 export async function getOrderStats(address: string, authHeader: Record<string, string>): Promise<OrderStats> {
