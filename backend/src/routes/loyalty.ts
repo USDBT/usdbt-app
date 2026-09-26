@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { sql } from '../lib/db'
+import { isUsdbtLaunched } from '../lib/usdbt'
 
 export const loyaltyRouter = Router()
 
@@ -25,30 +26,13 @@ loyaltyRouter.get('/:address', async (req, res) => {
   const addr = req.params.address?.toLowerCase()
   if (!addr) return res.status(400).json({ error: 'wallet address required' })
 
-  let [loyalty] = await sql`
+  // Read-only: points are only created by delivered orders (no free sign-up points to farm)
+  const [row] = await sql`
     SELECT wallet_address, points_balance, lifetime_points, tier, updated_at
     FROM user_loyalty
     WHERE lower(wallet_address) = ${addr}
   `
-
-  if (!loyalty) {
-    loyalty = {
-      wallet_address: addr,
-      points_balance: 100, // Welcome gift points for new shoppers!
-      lifetime_points: 100,
-      tier: 'bronze',
-      updated_at: new Date().toISOString(),
-    }
-    await sql`
-      INSERT INTO user_loyalty (wallet_address, points_balance, lifetime_points, tier)
-      VALUES (${addr}, 100, 100, 'bronze')
-      ON CONFLICT (wallet_address) DO NOTHING
-    `
-    await sql`
-      INSERT INTO loyalty_transactions (wallet_address, points_delta, action)
-      VALUES (${addr}, 100, 'welcome_bonus')
-    `
-  }
+  const loyalty = row ?? { wallet_address: addr, points_balance: 0, lifetime_points: 0, tier: 'bronze' }
 
   const tierInfo = calculateTier(loyalty.lifetime_points)
 
@@ -70,6 +54,7 @@ loyaltyRouter.get('/:address', async (req, res) => {
     nextTierThreshold: tierInfo.nextThreshold,
     pointsToNextTier: Math.max(0, tierInfo.nextThreshold - loyalty.lifetime_points),
     transactions,
+    usdbtLaunched: isUsdbtLaunched(),
   })
 })
 
