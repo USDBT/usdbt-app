@@ -7,6 +7,7 @@ import { usersRouter } from './routes/users'
 import { balancesRouter } from './routes/balances'
 import { authRouter } from './routes/auth'
 import { chatRouter } from './routes/chat'
+import { loyaltyRouter } from './routes/loyalty'
 import { startPoller } from './services/poller'
 import { sql, runMigrations } from './lib/db'
 
@@ -45,6 +46,7 @@ app.use('/orders', ordersRouter)
 app.use('/users', usersRouter)
 app.use('/balances', balancesRouter)
 app.use('/chat', chatRouter)
+app.use('/loyalty', loyaltyRouter)
 
 app.listen(PORT, async () => {
   console.log(`[usdtb-backend] listening on port ${PORT}`)
