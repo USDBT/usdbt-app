@@ -5,20 +5,42 @@ import {
   X, Check, Minus, Plus,
   DollarSign, CreditCard, Mail,
   Tag, FolderOpen, Globe, Zap, ShieldCheck,
+  Sparkles, Gift, Layers, Bell, Shield,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { createOrder, fetchProductDetail, getWalletBalances, priceLabel, titleize, type OrderCreated, type PaymentCurrency, type Product } from '@/lib/api'
+import {
+  createOrder,
+  fetchProductDetail,
+  getWalletBalances,
+  priceLabel,
+  titleize,
+  type OrderCreated,
+  type PaymentCurrency,
+  type PaymentChain,
+  type Product,
+  getLoyaltyStats,
+  verifyReferralCode,
+  createPriceAlert,
+  type LoyaltyStats,
+} from '@/lib/api'
 import { formatAmount } from '@/lib/relay'
 import { getSimSpent } from '@/lib/auth'
 
 function SectionLabel({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
   return (
-    <div className="flex items-center gap-1.5 mb-3">
+    <div className="flex items-center gap-1.5 mb-2.5">
       <Icon size={12} className="text-gray-400" />
       <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">{text}</p>
     </div>
   )
 }
+
+const CHAIN_OPTIONS: Array<{ id: PaymentChain; name: string; currencies: PaymentCurrency[] }> = [
+  { id: 'robinhood', name: 'Robinhood', currencies: ['USDG', 'ETH'] },
+  { id: 'base', name: 'Base', currencies: ['USDC', 'ETH'] },
+  { id: 'ethereum', name: 'Ethereum', currencies: ['ETH', 'USDC', 'USDT'] },
+  { id: 'solana', name: 'Solana', currencies: ['SOL', 'USDC'] },
+]
 
 export function OrderForm({
   product,
@@ -44,8 +66,35 @@ export function OrderForm({
   const [activeTab, setActiveTab] = useState<'order' | 'details'>('order')
   const [loading, setLoading] = useState(false)
   const [balancesLoading, setBalancesLoading] = useState(false)
+
+  // Multi-chain & Currency
+  const [chain, setChain] = useState<PaymentChain>('robinhood')
   const [currency, setCurrency] = useState<PaymentCurrency>('USDG')
   const [balances, setBalances] = useState<{ USDG: number; ETH: number } | null>(null)
+
+  // Bulk Buying
+  const [quantity, setQuantity] = useState<number>(1)
+
+  // Loyalty Points
+  const [loyalty, setLoyalty] = useState<LoyaltyStats | null>(null)
+  const [useLoyaltyPoints, setUseLoyaltyPoints] = useState(false)
+  const [pointsToRedeem, setPointsToRedeem] = useState<number>(0)
+
+  // Referral Program
+  const [referralInput, setReferralInput] = useState('')
+  const [appliedReferral, setAppliedReferral] = useState<string | null>(null)
+  const [referralDiscountPct, setReferralDiscountPct] = useState<number>(0)
+  const [referralError, setReferralError] = useState<string | null>(null)
+
+  // NFT & Escrow Options
+  const [isNft, setIsNft] = useState(false)
+  const [isEscrow, setIsEscrow] = useState(false)
+
+  // Price Alert Modal
+  const [alertModalOpen, setAlertModalOpen] = useState(false)
+  const [alertDiscountPct, setAlertDiscountPct] = useState('5')
+  const [alertSaved, setAlertSaved] = useState(false)
+
   const [error, setError] = useState<string | null>(null)
   const [showUsdbtModal, setShowUsdbtModal] = useState(false)
 
@@ -69,6 +118,19 @@ export function OrderForm({
     return () => { cancelled = true }
   }, [product])
 
+  // Fetch user loyalty stats
+  useEffect(() => {
+    if (!walletAddress) return
+    getLoyaltyStats(walletAddress)
+      .then((l) => {
+        setLoyalty(l)
+        if (l.pointsBalance >= 100) {
+          setPointsToRedeem(Math.min(l.pointsBalance, 500))
+        }
+      })
+      .catch(() => {})
+  }, [walletAddress])
+
   const p = resolvedProduct
 
   const sortedDenominations = useMemo(
@@ -77,17 +139,30 @@ export function OrderForm({
   )
 
   const selectedValue = p.range ? parseFloat(customValue) || 0 : parseFloat(fixedInput) || 0
-  // coinAmounts are stablecoin quotes; USDG tracks USD, so they only apply to USDG
-  const exactUsdg = currency === 'USDG' ? (coinAmounts[selectedValue] ?? null) : null
+  const subtotal = selectedValue * quantity
+
+  // Volume discounts
+  const volumeDiscountPct = quantity >= 25 ? 6 : quantity >= 10 ? 4 : quantity >= 5 ? 2 : 0
+  const volumeDiscount = (subtotal * volumeDiscountPct) / 100
+
+  // Referral discount (2%)
+  const referralDiscount = appliedReferral ? (subtotal * (referralDiscountPct / 100)) : 0
+
+  // Loyalty discount (100 pts = $1, max 20% of subtotal)
+  const maxLoyaltyDiscount = subtotal * 0.20
+  const loyaltyDiscount = useLoyaltyPoints ? Math.min(pointsToRedeem / 100, maxLoyaltyDiscount) : 0
+
+  const totalDiscount = volumeDiscount + referralDiscount + loyaltyDiscount
+  const finalPrice = Math.max(1, parseFloat((subtotal - totalDiscount).toFixed(2)))
+
   const inRange = p.range ? selectedValue >= p.range.min && selectedValue <= p.range.max : true
   const emailValid = email.includes('@')
-  // carousel selection always produces a valid denomination; stepper can't go out of range
-  // ETH needs a live quote to compare against, so only USDG is checked before ordering
-  const walletBalance = balances ? balances[currency] : null
-  const hasEnoughBalance = currency !== 'USDG' || walletBalance === null ? true : walletBalance >= (exactUsdg ?? selectedValue)
+  const walletBalance = balances && currency === 'USDG' ? balances.USDG : null
+  const hasEnoughBalance = chain !== 'robinhood' || currency !== 'USDG' || walletBalance === null ? true : walletBalance >= finalPrice
 
   const valid = !detailLoading && !detailError && selectedValue > 0 && emailValid && inRange && hasEnoughBalance
 
+  // Balance loader
   useEffect(() => {
     let cancelled = false
     async function loadBalances() {
@@ -112,13 +187,57 @@ export function OrderForm({
     return () => { cancelled = true }
   }, [walletAddress])
 
-function stepVariable(dir: 1 | -1) {
+  // Sync available currencies when chain changes
+  const handleChainChange = (newChain: PaymentChain) => {
+    setChain(newChain)
+    const opt = CHAIN_OPTIONS.find((c) => c.id === newChain)
+    if (opt && !opt.currencies.includes(currency)) {
+      setCurrency(opt.currencies[0])
+    }
+  }
+
+  function stepVariable(dir: 1 | -1) {
     if (!p.range) return
     const step = p.range.step || 1
     const next = Math.max(p.range.min, Math.min(p.range.max,
       (parseFloat(customValue) || p.range.min) + step * dir,
     ))
     setCustomValue(String(Number(next.toFixed(2))))
+  }
+
+  async function handleApplyReferral() {
+    setReferralError(null)
+    if (!referralInput.trim()) return
+    const res = await verifyReferralCode(referralInput.trim())
+    if (res.valid) {
+      setAppliedReferral(referralInput.trim().toUpperCase())
+      setReferralDiscountPct(res.discountPct)
+    } else {
+      setReferralError('Invalid or expired referral code.')
+    }
+  }
+
+  async function handleCreateAlert() {
+    if (!email) {
+      setError('Please provide an email for the price alert')
+      return
+    }
+    try {
+      await createPriceAlert({
+        walletAddress,
+        email,
+        brandId: p.id,
+        brandName: p.name,
+        targetDiscountPct: Number(alertDiscountPct) || 5,
+      })
+      setAlertSaved(true)
+      setTimeout(() => {
+        setAlertSaved(false)
+        setAlertModalOpen(false)
+      }, 1500)
+    } catch {
+      setError('Could not save price alert')
+    }
   }
 
   async function submit() {
@@ -137,6 +256,12 @@ function stepVariable(dir: 1 | -1) {
         email,
         walletAddress,
         paymentCurrency: currency,
+        paymentChain: chain,
+        quantity,
+        loyaltyPointsUsed: useLoyaltyPoints ? pointsToRedeem : 0,
+        referralCode: appliedReferral || undefined,
+        isNft,
+        isEscrow: isEscrow || finalPrice >= 250,
       })
       onOrder(order, email)
     } catch (err) {
@@ -147,19 +272,18 @@ function stepVariable(dir: 1 | -1) {
   }
 
   const DETAILS = [
-    { icon: Tag,        label: 'Type',     value: titleize(p.type || 'gift_card') },
-    { icon: FolderOpen, label: 'Category', value: titleize(p.categories?.[0] || 'gift_card') },
-    { icon: Globe,      label: 'Country',  value: p.country || '—' },
-    { icon: DollarSign, label: 'Currency', value: p.currency || 'USD' },
-    { icon: Zap,        label: 'Delivery', value: 'Email · Instant' },
-    { icon: ShieldCheck,label: 'KYC',      value: 'None required' },
+    { icon: Tag,         label: 'Type',     value: titleize(p.type || 'gift_card') },
+    { icon: FolderOpen,  label: 'Category', value: titleize(p.categories?.[0] || 'gift_card') },
+    { icon: Globe,       label: 'Country',  value: p.country || '—' },
+    { icon: DollarSign,  label: 'Currency', value: p.currency || 'USD' },
+    { icon: Zap,         label: 'Delivery', value: 'Email · Instant' },
+    { icon: ShieldCheck, label: 'KYC',      value: 'None required (Tier 0 Zero-KYC)' },
   ]
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Header — blurred brand image bg */}
+      {/* Header */}
       <div className="relative overflow-hidden flex-shrink-0">
-        {/* Blurred bg image */}
         {p.image && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -170,14 +294,11 @@ function stepVariable(dir: 1 | -1) {
             style={{ filter: 'blur(2px)', transform: 'scale(1.1)' }}
           />
         )}
-        {/* Tint overlay */}
         <div className="absolute inset-0" style={{ backgroundColor: p.image ? 'rgba(20,20,60,0.62)' : '#2b2bf5' }} />
-        {/* Bottom fade — merges header into the form below */}
         <div
           className="absolute inset-x-0 bottom-0 h-10 z-[5] pointer-events-none"
           style={{ background: 'linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.7) 70%, #fff 100%)' }}
         />
-        {/* Content */}
         <div className="relative z-10 px-5 pt-4 pb-5">
           <div className="flex justify-end mb-3">
             <button
@@ -187,16 +308,10 @@ function stepVariable(dir: 1 | -1) {
               <X size={15} />
             </button>
           </div>
-          <h2
-            className="text-lg font-bold text-white leading-tight"
-            style={{ textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}
-          >
+          <h2 className="text-lg font-bold text-white leading-tight" style={{ textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>
             {p.name}
           </h2>
-          <p
-            className="text-xs text-white/70 mt-0.5"
-            style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}
-          >
+          <p className="text-xs text-white/70 mt-0.5" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
             Gift Card · {detailLoading ? 'Loading…' : priceLabel(p)}
           </p>
         </div>
@@ -222,40 +337,32 @@ function stepVariable(dir: 1 | -1) {
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'order' ? (
-          <div className="px-5 py-5 space-y-5">
-            {/* Amount */}
+          <div className="px-5 py-4 space-y-4">
+            {/* Amount & Quantity */}
             <div>
-              <SectionLabel icon={DollarSign} text="Amount" />
-              {detailLoading ? (
-                <div className="flex items-center justify-center h-16">
-                  <div className="w-5 h-5 rounded-full border-2 border-[#2b2bf5] border-t-transparent animate-spin" />
-                </div>
-              ) : detailError ? (
-                <div className="flex flex-col items-center gap-2 py-3">
-                  <p className="text-xs text-gray-400">Could not load product options.</p>
+              <div className="flex items-center justify-between mb-2">
+                <SectionLabel icon={DollarSign} text="Card Value" />
+                {/* Bulk Quantity Stepper */}
+                <div className="flex items-center gap-1.5 bg-gray-100 rounded-lg p-0.5">
                   <button
                     type="button"
-                    onClick={() => {
-                      setDetailError(false)
-                      setDetailLoading(true)
-                      fetchProductDetail(product.id)
-                        .then((detail) => {
-                          if (detail.denominations.length === 0 && !detail.range) { setDetailError(true); return }
-                          setResolvedProduct({ ...product, denominations: detail.denominations, range: detail.range })
-                          setCoinAmounts(detail.coinAmounts ?? {})
-                          if (detail.denominations.length > 0) setFixedInput(String(detail.denominations[0]))
-                          if (detail.range) setCustomValue(String(detail.range.min))
-                        })
-                        .catch(() => setDetailError(true))
-                        .finally(() => setDetailLoading(false))
-                    }}
-                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                    className="w-6 h-6 flex items-center justify-center rounded bg-white text-gray-700 shadow-xs hover:bg-gray-50 text-xs font-bold"
                   >
-                    Retry
+                    -
+                  </button>
+                  <span className="text-xs font-semibold px-1 font-mono">{quantity}x</span>
+                  <button
+                    type="button"
+                    onClick={() => setQuantity((q) => Math.min(100, q + 1))}
+                    className="w-6 h-6 flex items-center justify-center rounded bg-white text-gray-700 shadow-xs hover:bg-gray-50 text-xs font-bold"
+                  >
+                    +
                   </button>
                 </div>
-              ) : p.denominations.length > 0 ? (
-                /* Fixed denomination carousel */
+              </div>
+
+              {p.denominations.length > 0 ? (
                 <div className="flex gap-2 overflow-x-auto pb-1 snap-x" style={{ scrollbarWidth: 'none' }}>
                   {sortedDenominations.map((d) => {
                     const selected = parseFloat(fixedInput) === d
@@ -267,20 +374,13 @@ function stepVariable(dir: 1 | -1) {
                         className={`tile flex-shrink-0 snap-start flex flex-col items-center px-4 py-2.5 ${selected ? 'tile-selected text-[--color-brand]' : 'text-[--ink]'}`}
                       >
                         <span className="font-mono tabular text-sm font-semibold">${d}</span>
-                        {currency === 'USDG' && coinAmounts[d] && (
-                          <span className={`text-[10px] mt-0.5 text-gray-400 font-mono tabular`}>
-                            {coinAmounts[d].toFixed(2)} USDG
-                          </span>
-                        )}
                       </button>
                     )
                   })}
                 </div>
               ) : p.range ? (
-                /* Range stepper */
                 <div className="flex items-stretch gap-2">
-                  <button type="button" onClick={() => stepVariable(-1)} aria-label="Decrease amount"
-                    className="btn btn-secondary btn-icon flex-shrink-0">
+                  <button type="button" onClick={() => stepVariable(-1)} aria-label="Decrease amount" className="btn btn-secondary btn-icon flex-shrink-0">
                     <Minus size={16} />
                   </button>
                   <div className="flex-1 relative">
@@ -292,53 +392,166 @@ function stepVariable(dir: 1 | -1) {
                       className="w-full h-12 pl-7 pr-3 text-center font-mono tabular text-base font-semibold border border-[--line] rounded-xl outline-none focus:border-[--color-brand] focus:ring-4 focus:ring-[rgba(43,43,245,0.12)] bg-white transition-colors"
                     />
                   </div>
-                  <button type="button" onClick={() => stepVariable(1)} aria-label="Increase amount"
-                    className="btn btn-secondary btn-icon flex-shrink-0">
+                  <button type="button" onClick={() => stepVariable(1)} aria-label="Increase amount" className="btn btn-secondary btn-icon flex-shrink-0">
                     <Plus size={16} />
                   </button>
                 </div>
               ) : null}
-              {p.range && !inRange && selectedValue > 0 && (
-                <p className="text-xs text-red-500 mt-2">Amount must be ${p.range.min}–${p.range.max}</p>
+
+              {/* Volume discount notice */}
+              {volumeDiscountPct > 0 && (
+                <div className="mt-2 flex items-center justify-between text-[11px] font-medium text-emerald-700 bg-emerald-50 rounded-lg px-2.5 py-1.5 border border-emerald-100">
+                  <span className="flex items-center gap-1">
+                    <Layers size={12} />
+                    {volumeDiscountPct}% Volume Discount Applied ({quantity} cards)
+                  </span>
+                  <span>-${volumeDiscount.toFixed(2)}</span>
+                </div>
               )}
             </div>
 
             <div className="border-t border-gray-100" />
 
-            {/* Pay with */}
+            {/* Multi-Chain & Token Selection */}
             <div>
-              <SectionLabel icon={CreditCard} text="Pay with" />
-              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Payment currency">
-                {([
-                  { id: 'USDG', name: 'USDG', sub: 'Global Dollar' },
-                  { id: 'ETH', name: 'ETH', sub: 'Ether' },
-                ] as const).map((c) => (
+              <SectionLabel icon={CreditCard} text="Payment Network & Crypto" />
+              {/* Chain Tabs */}
+              <div className="grid grid-cols-4 gap-1.5 bg-gray-100 p-1 rounded-xl mb-2.5">
+                {CHAIN_OPTIONS.map((c) => (
                   <button
                     key={c.id}
                     type="button"
-                    role="radio"
-                    aria-checked={currency === c.id}
-                    onClick={() => setCurrency(c.id)}
-                    className={`tile flex flex-col items-start px-3.5 py-2.5 text-left ${currency === c.id ? 'tile-selected' : ''}`}
+                    onClick={() => handleChainChange(c.id)}
+                    className={`py-1.5 text-[11px] font-medium rounded-lg transition-all text-center ${
+                      chain === c.id
+                        ? 'bg-white text-gray-900 shadow-xs font-semibold'
+                        : 'text-gray-500 hover:text-gray-900'
+                    }`}
                   >
-                    <span className="flex items-center gap-1.5 w-full">
-                      <span className={`text-sm font-semibold ${currency === c.id ? 'text-[--color-brand]' : 'text-[--ink]'}`}>{c.name}</span>
-                      {currency === c.id && <Check size={14} className="text-[--color-brand] ml-auto" />}
-                    </span>
-                    <span className="text-[12px] text-gray-500 font-mono tabular mt-0.5">
-                      {balances ? formatAmount(balances[c.id], c.id) : c.sub}
-                    </span>
+                    {c.name}
                   </button>
                 ))}
               </div>
-              <p className="text-[12px] text-gray-500 mt-2">Paid on Robinhood Chain from your connected wallet.</p>
-              <button
-                type="button"
-                onClick={() => setShowUsdbtModal(true)}
-                className="mt-2 text-[12px] text-gray-500 underline underline-offset-2 hover:text-gray-700"
-              >
-                Paying with $USDBT is coming soon
-              </button>
+
+              {/* Currencies for chosen chain */}
+              <div className="grid grid-cols-3 gap-2">
+                {CHAIN_OPTIONS.find((c) => c.id === chain)?.currencies.map((curr) => (
+                  <button
+                    key={curr}
+                    type="button"
+                    onClick={() => setCurrency(curr)}
+                    className={`tile flex flex-col items-center justify-center py-2 px-2 text-center ${
+                      currency === curr ? 'tile-selected text-[--color-brand]' : 'text-gray-700'
+                    }`}
+                  >
+                    <span className="text-xs font-bold font-mono">{curr}</span>
+                    <span className="text-[10px] text-gray-400 mt-0.5">{chain === 'solana' ? 'Solana SPL' : 'EVM'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100" />
+
+            {/* Loyalty Points Redemption */}
+            {loyalty && loyalty.pointsBalance >= 50 && (
+              <div className="bg-[#f6f7ff] rounded-xl p-3 border border-[#e4e7ff]">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useLoyaltyPoints}
+                      onChange={(e) => setUseLoyaltyPoints(e.target.checked)}
+                      className="rounded text-[--color-brand] focus:ring-0"
+                    />
+                    <span className="text-xs font-semibold text-gray-800 flex items-center gap-1">
+                      <Sparkles size={13} className="text-[#2b2bf5]" />
+                      Redeem Loyalty Points
+                    </span>
+                  </label>
+                  <span className="text-[11px] text-[#2b2bf5] font-mono font-medium">
+                    {loyalty.pointsBalance} pts available
+                  </span>
+                </div>
+                {useLoyaltyPoints && (
+                  <div className="mt-2 pt-2 border-t border-[#e2e5ff] flex items-center justify-between text-xs text-gray-600">
+                    <span>Redeeming {pointsToRedeem} pts</span>
+                    <span className="font-semibold text-emerald-600">-${loyaltyDiscount.toFixed(2)} off</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Referral Code Box */}
+            <div>
+              <SectionLabel icon={Gift} text="Referral Code" />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="REF-XXXXXX"
+                  value={referralInput}
+                  onChange={(e) => setReferralInput(e.target.value)}
+                  className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-xl outline-none uppercase font-mono bg-gray-50 focus:bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyReferral}
+                  className="px-3 py-2 bg-gray-900 text-white rounded-xl text-xs font-medium hover:bg-gray-800 transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+              {appliedReferral && (
+                <p className="text-[11px] text-emerald-600 mt-1 flex items-center gap-1 font-medium">
+                  <Check size={11} /> Code {appliedReferral} applied! 2% discount (-${referralDiscount.toFixed(2)})
+                </p>
+              )}
+              {referralError && (
+                <p className="text-[11px] text-red-500 mt-1">{referralError}</p>
+              )}
+            </div>
+
+            <div className="border-t border-gray-100" />
+
+            {/* Advanced Options: NFT Voucher & Escrow */}
+            <div className="space-y-2">
+              <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={isNft}
+                  onChange={(e) => setIsNft(e.target.checked)}
+                  className="mt-0.5 rounded text-[--color-brand]"
+                />
+                <div>
+                  <p className="text-xs font-semibold text-gray-800 flex items-center gap-1">
+                    Mint as NFT Gift Card
+                    <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded-full font-medium">Web3</span>
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                    Get an on-chain digital card token. Hold, transfer to friends, or unwrap code anytime.
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-2.5 cursor-pointer p-2.5 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={isEscrow || finalPrice >= 250}
+                  disabled={finalPrice >= 250}
+                  onChange={(e) => setIsEscrow(e.target.checked)}
+                  className="mt-0.5 rounded text-[--color-brand]"
+                />
+                <div>
+                  <p className="text-xs font-semibold text-gray-800 flex items-center gap-1">
+                    <Shield size={12} className="text-emerald-600" />
+                    Escrow Protection
+                    {finalPrice >= 250 && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.2 rounded-full font-medium">Included ($250+)</span>}
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+                    Crypto locked in escrow until you confirm the code works or 24h expires.
+                  </p>
+                </div>
+              </label>
             </div>
 
             <div className="border-t border-gray-100" />
@@ -363,35 +576,29 @@ function stepVariable(dir: 1 | -1) {
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl outline-none focus:border-[--color-brand] bg-gray-50 focus:bg-white transition-colors"
               />
-              {!emailValid && email.length > 0 && (
-                <p className="text-xs text-red-500 mt-2">Enter a valid email address.</p>
-              )}
             </div>
 
-            {/* Price summary — only show when a valid denomination is selected */}
+            {/* Price Summary */}
             {selectedValue > 0 && (
-              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-2">
-                <div className="flex items-center justify-between text-sm text-gray-500">
-                  <span>Card value</span><span>${selectedValue}</span>
+              <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 space-y-1.5 text-xs">
+                <div className="flex justify-between text-gray-500">
+                  <span>Card value ({quantity}x ${selectedValue})</span>
+                  <span>${subtotal.toFixed(2)}</span>
                 </div>
-                {exactUsdg !== null && (
-                  <div className="flex items-center justify-between text-sm font-semibold text-gray-800">
-                    <span>You send</span><span className="font-mono tabular">{formatAmount(exactUsdg, 'USDG')}</span>
+                {totalDiscount > 0 && (
+                  <div className="flex justify-between text-emerald-600 font-medium">
+                    <span>Discounts (Volume, Loyalty, Referral)</span>
+                    <span>-${totalDiscount.toFixed(2)}</span>
                   </div>
                 )}
-                {currency === 'ETH' && (
-                  <p className="text-xs text-gray-500">The exact ETH amount is quoted on the next step.</p>
-                )}
-                <div className={`text-xs pt-0.5 ${hasEnoughBalance ? 'text-emerald-600' : 'text-red-500'}`}>
-                  {balancesLoading
-                    ? 'Checking wallet balance…'
-                    : walletBalance === null || currency !== 'USDG'
-                      ? ''
-                      : hasEnoughBalance
-                        ? `${formatAmount(walletBalance, 'USDG')} available`
-                        : `Not enough USDG. You have ${formatAmount(walletBalance, 'USDG')}.`}
+                <div className="flex justify-between text-sm font-bold text-gray-900 pt-1 border-t border-gray-200">
+                  <span>You pay</span>
+                  <span>${finalPrice.toFixed(2)} in {currency}</span>
+                </div>
+                <div className="text-[11px] text-gray-400">
+                  Network: {chain.toUpperCase()} · Earns {Math.floor(finalPrice * 10)} loyalty points
                 </div>
               </div>
             )}
@@ -400,6 +607,15 @@ function stepVariable(dir: 1 | -1) {
           </div>
         ) : (
           <div className="px-5 py-5 space-y-3">
+            <button
+              type="button"
+              onClick={() => setAlertModalOpen(true)}
+              className="w-full py-2.5 px-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 hover:bg-amber-100 transition-colors"
+            >
+              <Bell size={14} className="text-amber-600" />
+              Set Price Drop / Promo Alert for {p.name}
+            </button>
+
             {DETAILS.map(({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                 <div className="flex items-center gap-2 text-gray-400">
@@ -423,50 +639,64 @@ function stepVariable(dir: 1 | -1) {
             className="w-full h-10 px-4 rounded-xl text-xs sm:text-sm font-semibold text-white bg-[#2b2bf5] hover:bg-[#1f1fd8] shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer"
           >
             {loading && <span className="loading-bar-spinner" aria-hidden="true" />}
-            <span style={{ color: '#ffffff' }}>{loading ? 'Creating order…' : 'Continue to payment'}</span>
+            <span style={{ color: '#ffffff' }}>
+              {loading ? 'Creating order…' : `Pay $${finalPrice.toFixed(2)} on ${chain.toUpperCase()}`}
+            </span>
           </button>
         </div>
       )}
 
-      {/* USDBT info modal */}
+      {/* Price Alert Modal */}
       <AnimatePresence>
-        {showUsdbtModal && (
+        {alertModalOpen && (
           <>
             <motion.div
               className="absolute inset-0 z-20 bg-black/30 rounded-[inherit]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              onClick={() => setShowUsdbtModal(false)}
+              onClick={() => setAlertModalOpen(false)}
             />
             <motion.div
-              className="absolute inset-x-4 z-30 bg-white rounded-2xl shadow-xl p-6"
+              className="absolute inset-x-4 z-30 bg-white rounded-2xl shadow-xl p-5"
               style={{ top: '50%', translateY: '-50%' }}
               initial={{ scale: 0.92, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.92, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#eef0ff' }}>
-                  <span className="text-lg font-bold" style={{ color: '#2b2bf5' }}>$</span>
-                </div>
-                <button onClick={() => setShowUsdbtModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                  <Bell size={16} className="text-amber-500" />
+                  Price Alert: {p.name}
+                </h3>
+                <button onClick={() => setAlertModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600">
                   <X size={15} />
                 </button>
               </div>
-              <h3 className="text-base font-semibold text-gray-900 mb-2">Pay with $USDBT</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">
-                Soon you'll be able to pay directly with <span className="font-semibold text-gray-700">$USDBT</span>. No swaps, no extra steps.
+              <p className="text-xs text-gray-500 mb-3">
+                We'll email you immediately whenever {p.name} has a promotion or discount.
               </p>
-              <p className="text-xs text-gray-400 mt-3">Hold $USDBT to unlock this feature when it launches.</p>
-              <button
-                onClick={() => setShowUsdbtModal(false)}
-                className="btn btn-primary btn-block mt-5"
-              >
-                Got it
-              </button>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-600 block mb-1">Target Discount</label>
+                  <select
+                    value={alertDiscountPct}
+                    onChange={(e) => setAlertDiscountPct(e.target.value)}
+                    className="w-full text-xs p-2.5 border border-gray-200 rounded-xl bg-gray-50"
+                  >
+                    <option value="3">Any promotion (3%+ off)</option>
+                    <option value="5">Good discount (5%+ off)</option>
+                    <option value="10">Big discount (10%+ off)</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCreateAlert}
+                  className="w-full py-2.5 bg-gray-900 text-white rounded-xl text-xs font-semibold hover:bg-gray-800 transition-colors"
+                >
+                  {alertSaved ? 'Alert Active! ✓' : 'Save Price Alert'}
+                </button>
+              </div>
             </motion.div>
           </>
         )}
