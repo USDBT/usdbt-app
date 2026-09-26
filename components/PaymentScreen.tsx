@@ -72,15 +72,8 @@ export function PaymentScreen({
     setError(null)
     setPhase('paying')
     try {
-      if (isSolana) {
-        // Solana payment simulation / verification trigger
-        setStepNote('Verifying Solana transaction on-chain…')
-        setTimeout(() => {
-          setPhase('submitted')
-          onSuccess()
-        }, 1500)
-        return
-      }
+      // Never mark a Solana order paid client-side: there is no on-chain verification yet
+      if (isSolana) throw new Error('Solana payments are not available yet. Start a new order on Robinhood Chain.')
 
       await payWithRelay(order, setStepNote)
       setPhase('submitted')

@@ -36,8 +36,16 @@ export async function createOrder(req: Request, res: Response) {
   if (!brandName || !familyName || !denomination || !faceValue || !email || !walletAddress) {
     return res.status(400).json({ error: 'brandName, familyName, denomination, faceValue, email, and walletAddress are required' })
   }
-  if (!isAddress(walletAddress) && paymentChain !== 'solana') {
+  if (!isAddress(walletAddress)) {
     return res.status(400).json({ error: 'invalid walletAddress' })
+  }
+  // Only Robinhood Chain is wired end to end (Relay quotes originate there and the wallet
+  // flow only signs on 4663). Base/Ethereum/Solana stay disabled until they settle for real.
+  if (paymentChain !== 'robinhood') {
+    return res.status(400).json({ error: 'Only Robinhood Chain payments are supported right now' })
+  }
+  if (paymentCurrency !== 'USDG' && paymentCurrency !== 'ETH') {
+    return res.status(400).json({ error: 'paymentCurrency must be USDG or ETH' })
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: 'invalid email' })
@@ -87,8 +95,8 @@ export async function createOrder(req: Request, res: Response) {
 
   const currency = paymentCurrency as SupportedCurrency
 
-  // Simulated or Solana flow
-  if (isSimulatedAddress(walletAddress) || selectedChain === 'solana') {
+  // Simulated test wallets only; every real order goes through Relay + Cryptorefills below
+  if (isSimulatedAddress(walletAddress)) {
     const coinAmount = selectedChain === 'solana'
       ? convertUsdToCrypto(effectiveUsdTotal, currency)
       : simulatedCoinAmount(effectiveUsdTotal)

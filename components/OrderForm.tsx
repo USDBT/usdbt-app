@@ -37,9 +37,7 @@ function SectionLabel({ icon: Icon, text }: { icon: React.ElementType; text: str
 
 const CHAIN_OPTIONS: Array<{ id: PaymentChain; name: string; currencies: PaymentCurrency[] }> = [
   { id: 'robinhood', name: 'Robinhood', currencies: ['USDG', 'ETH'] },
-  { id: 'base', name: 'Base', currencies: ['USDC', 'ETH'] },
-  { id: 'ethereum', name: 'Ethereum', currencies: ['ETH', 'USDC', 'USDT'] },
-  { id: 'solana', name: 'Solana', currencies: ['SOL', 'USDC'] },
+  // Base, Ethereum and Solana are hidden until their payments settle end to end.
 ]
 
 export function OrderForm({
@@ -414,9 +412,9 @@ export function OrderForm({
 
             {/* Multi-Chain & Token Selection */}
             <div>
-              <SectionLabel icon={CreditCard} text="Payment Network & Crypto" />
+              <SectionLabel icon={CreditCard} text="Pay with" />
               {/* Chain Tabs */}
-              <div className="grid grid-cols-4 gap-1.5 bg-gray-100 p-1 rounded-xl mb-2.5">
+              {CHAIN_OPTIONS.length > 1 && <div className="grid grid-cols-4 gap-1.5 bg-gray-100 p-1 rounded-xl mb-2.5">
                 {CHAIN_OPTIONS.map((c) => (
                   <button
                     key={c.id}
@@ -431,10 +429,10 @@ export function OrderForm({
                     {c.name}
                   </button>
                 ))}
-              </div>
+              </div>}
 
               {/* Currencies for chosen chain */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {CHAIN_OPTIONS.find((c) => c.id === chain)?.currencies.map((curr) => (
                   <button
                     key={curr}
@@ -445,7 +443,7 @@ export function OrderForm({
                     }`}
                   >
                     <span className="text-xs font-bold font-mono">{curr}</span>
-                    <span className="text-[10px] text-gray-400 mt-0.5">{chain === 'solana' ? 'Solana SPL' : 'EVM'}</span>
+                    <span className="text-[10px] text-gray-400 mt-0.5">Robinhood Chain</span>
                   </button>
                 ))}
               </div>
